@@ -1,33 +1,97 @@
-HELP.md
+############################
+# BUILD FILES
+############################
 target/
-.mvn/wrapper/maven-wrapper.jar
-!**/src/main/**/target/
-!**/src/test/**/target/
+build/
 
-### STS ###
-.apt_generated
-.classpath
-.factorypath
-.project
-.settings
-.springBeans
-.sts4-cache
+############################
+# MAVEN WRAPPER (KEEP THESE)
+############################
+# Giữ lại Maven Wrapper để chạy project trên mọi máy
+!.mvn/wrapper/maven-wrapper.jar
+!.mvn/wrapper/maven-wrapper.properties
+!mvnw
+!mvnw.cmd
 
-### IntelliJ IDEA ###
-.idea
+############################
+# LOG FILES
+############################
+*.log
+logs/
+
+############################
+# TEMP FILES
+############################
+*.tmp
+*.temp
+*.swp
+*.swo
+
+############################
+# OS FILES
+############################
+.DS_Store
+Thumbs.db
+
+############################
+# INTELLIJ IDEA
+############################
+.idea/
 *.iws
 *.iml
 *.ipr
 
-### NetBeans ###
+############################
+# ECLIPSE / STS
+############################
+.apt_generated/
+.classpath
+.factorypath
+.project
+.settings/
+.springBeans
+.sts4-cache/
+
+############################
+# NETBEANS
+############################
 /nbproject/private/
 /nbbuild/
 /dist/
 /nbdist/
 /.nb-gradle/
-build/
-!**/src/main/**/build/
-!**/src/test/**/build/
 
-### VS Code ###
+############################
+# VSCODE
+############################
 .vscode/
+
+############################
+# ENV FILES (VERY IMPORTANT)
+############################
+.env
+.env.*
+*.env
+
+############################
+# APPLICATION CONFIG SECRETS
+############################
+
+
+
+############################
+# DATABASE FILES (IF ANY)
+############################
+*.db
+*.sqlite
+
+############################
+# GENERATED FILES
+############################
+out/
+bin/
+
+############################
+# SPRING BOOT
+############################
+HELP.md
