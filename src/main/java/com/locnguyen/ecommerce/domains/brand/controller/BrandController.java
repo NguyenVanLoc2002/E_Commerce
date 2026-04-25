@@ -2,6 +2,8 @@ package com.locnguyen.ecommerce.domains.brand.controller;
 
 import com.locnguyen.ecommerce.common.constants.AppConstants;
 import com.locnguyen.ecommerce.common.response.ApiResponse;
+import com.locnguyen.ecommerce.common.response.PagedResponse;
+import com.locnguyen.ecommerce.domains.brand.dto.BrandFilter;
 import com.locnguyen.ecommerce.domains.brand.dto.BrandResponse;
 import com.locnguyen.ecommerce.domains.brand.dto.CreateBrandRequest;
 import com.locnguyen.ecommerce.domains.brand.dto.UpdateBrandRequest;
@@ -11,7 +13,10 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -33,6 +38,16 @@ public class BrandController {
     @GetMapping(AppConstants.API_V1 + "/brands/{id}")
     public ApiResponse<BrandResponse> getBrand(@PathVariable Long id) {
         return ApiResponse.success(brandService.getBrandById(id));
+    }
+
+    @Operation(summary = "[Admin] List all brands with filter and pagination")
+    @SecurityRequirement(name = "bearerAuth")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'STAFF')")
+    @GetMapping(AppConstants.API_V1 + "/admin/brands")
+    public ApiResponse<PagedResponse<BrandResponse>> getBrands(
+            @ModelAttribute BrandFilter filter,
+            @PageableDefault(size = AppConstants.DEFAULT_PAGE_SIZE, sort = "sortOrder") Pageable pageable) {
+        return ApiResponse.success(brandService.getBrands(filter, pageable));
     }
 
     @Operation(summary = "[Admin] Create brand")

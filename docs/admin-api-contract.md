@@ -217,7 +217,57 @@ Returns `200` with `data: null`.
 
 ## 4. Brand Management
 
-### 4.1 Create Brand
+### 4.1 List Brands
+
+- **Endpoint:** `GET /api/v1/admin/brands`
+- **Auth:** Bearer Token
+- **Allowed roles:** `STAFF`, `ADMIN`, `SUPER_ADMIN`
+- **Pagination:** `@PageableDefault(size=20, sort="sortOrder")` via Spring Pageable.
+
+#### Query Params (BrandFilter)
+
+All params are optional.
+
+| Param | Type | Required | Description |
+|---|---|:---:|---|
+| `name` | string | — | Partial, case-insensitive match on brand name |
+| `status` | string | — | `ACTIVE` or `INACTIVE` |
+| `page` | integer | — | Default: `0` |
+| `size` | integer | — | Default: `20` |
+| `sort` | string | — | Spring Pageable format, e.g., `sort=name,asc` (default: `sortOrder,asc`) |
+
+#### Response (200) — Paginated `BrandResponse`
+
+```json
+{
+  "success": true,
+  "code": "SUCCESS",
+  "message": "Request processed successfully",
+  "data": {
+    "items": [
+      {
+        "id": 1,
+        "name": "Nike",
+        "slug": "nike",
+        "logoUrl": "https://cdn.example.com/brands/nike.png",
+        "description": "American sportswear brand",
+        "sortOrder": 0,
+        "status": "ACTIVE",
+        "createdAt": "2026-04-20T08:00:00Z"
+      }
+    ],
+    "page": 0,
+    "size": 20,
+    "totalItems": 5,
+    "totalPages": 1,
+    "hasNext": false,
+    "hasPrevious": false
+  },
+  "timestamp": "2026-04-20T08:00:00Z"
+}
+```
+
+### 4.2 Create Brand
 
 - **Endpoint:** `POST /api/v1/admin/brands`
 - **Auth:** Bearer Token
@@ -253,13 +303,14 @@ Returns `200` with `data: null`.
     "slug": "nike",
     "logoUrl": "https://cdn.example.com/brands/nike.png",
     "description": "American sportswear brand",
+    "sortOrder": 0,
     "status": "ACTIVE",
     "createdAt": "2026-04-20T08:00:00Z"
   }
 }
 ```
 
-### 4.2 Update Brand
+### 4.3 Update Brand
 
 - **Endpoint:** `PATCH /api/v1/admin/brands/{id}`
 - **Auth:** Bearer Token
@@ -275,7 +326,7 @@ All fields optional (partial update).
 | `description` | string | Yes | — | Description |
 | `status` | string | Yes | `BrandStatus` enum | `ACTIVE`, `INACTIVE` |
 
-### 4.3 Delete Brand (Soft)
+### 4.4 Delete Brand (Soft)
 
 - **Endpoint:** `DELETE /api/v1/admin/brands/{id}`
 - **Auth:** Bearer Token
