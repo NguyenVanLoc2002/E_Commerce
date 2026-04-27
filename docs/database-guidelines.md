@@ -62,6 +62,7 @@ Với many-to-many hoặc mapping table:
 - `user_roles`
 - `product_categories`
 - `variant_attribute_values`
+- `collection_products`
 
 ---
 
@@ -78,10 +79,12 @@ Ví dụ:
 - `order_code`
 - `invoice_code`
 - `shipment_code`
+- `refund_code`
 
 Ví dụ giá trị:
 - `ORD202604060001`
 - `INV202604060010`
+- `REF202604060003`
 
 ### 4.3. Vì sao không chỉ dùng ID công khai
 - khó đọc với người dùng
@@ -150,6 +153,7 @@ Ví dụ:
 - `order_items.order_id -> orders.id`
 - `order_items.variant_id -> product_variants.id`
 - `payments.order_id -> orders.id`
+- `refunds.payment_id -> payments.id`
 
 ### 7.2. Không cascade delete bừa bãi
 Không khuyến nghị `ON DELETE CASCADE` trên dữ liệu giao dịch quan trọng.
@@ -194,6 +198,7 @@ Index cho:
 - `(order_id, status)` trên `payment_transactions`
 - `(product_id, status)` trên `reviews`
 - `(category_id, status)` nếu query sản phẩm theo category thường xuyên
+- `(voucher_id, customer_id)` trên `voucher_usages`
 
 ### 8.4. Không index quá nhiều
 Quá nhiều index sẽ làm chậm:
@@ -218,12 +223,15 @@ Chỉ index field thực sự cần.
 - `orders.order_code`
 - `shipments.shipment_code`
 - `invoices.invoice_code`
+- `refunds.refund_code`
 - `vouchers.code`
 
 ### Unique theo cặp
 Ví dụ:
 - `inventories(variant_id, warehouse_id)`
 - `user_roles(user_id, role_id)`
+- `collection_products(collection_id, product_id)`
+- `wishlist_items(wishlist_id, product_id)`
 
 ---
 
@@ -303,7 +311,11 @@ Phải kiểm soát enum ở code. Không để giá trị tùy tiện.
 * deleted_at
 * paid_at
 * shipped_at
+* delivered_at
 * completed_at
+* cancelled_at
+* returned_at
+* refunded_at
 
 ### 12.2. Timezone
 Khuyến nghị backend lưu timestamp theo UTC.
@@ -313,9 +325,26 @@ Có thể dùng application set timestamp. Nếu DB set mặc định thì phả
 
 ---
 
-## 13. JSON column guideline
+## 13. Optimistic Locking
 
-### 13.1. Khi nào được dùng
+### 13.1. Khi nào cần
+Các bảng có khả năng bị concurrent update cao phải dùng optimistic locking:
+- `inventories`: tránh oversell
+
+### 13.2. Cách implement
+Thêm cột `version BIGINT NOT NULL DEFAULT 0` và dùng `@Version` của JPA.
+
+```sql
+ALTER TABLE inventories ADD COLUMN version BIGINT NOT NULL DEFAULT 0;
+```
+
+JPA tự động xử lý `OptimisticLockException` khi có conflict. Service cần catch và retry hoặc trả lỗi phù hợp.
+
+---
+
+## 14. JSON column guideline
+
+### 14.1. Khi nào được dùng
 Chỉ dùng cho dữ liệu phụ, ít join, ít filter.
 Ví dụ:
 
@@ -323,7 +352,7 @@ Ví dụ:
 * metadata bổ sung
 * extra_info không cố định
 
-### 13.2. Không dùng JSON cho dữ liệu lõi
+### 14.2. Không dùng JSON cho dữ liệu lõi
 Không nên dùng JSON cho:
 
 * order items
@@ -335,9 +364,9 @@ Những dữ liệu này phải model hóa quan hệ rõ ràng.
 
 ---
 
-## 14. Table design guideline theo domain
+## 15. Table design guideline theo domain
 
-### 14.1. Identity & Access
+### 15.1. Identity & Access
 **users**
 Chứa: email, phone number, password hash, status, last login, audit columns
 
@@ -354,9 +383,9 @@ Mapping nhiều-nhiều giữa user và role.
 Thông tin nghiệp vụ customer có thể tách khỏi users.
 
 **addresses**
-Nhiều địa chỉ cho customer: shipping address, billing address
+Nhiều địa chỉ cho customer: shipping address, billing address. Thêm cờ `is_default`.
 
-### 14.2. Catalog
+### 15.2. Catalog
 **categories**
 - parent_id, name, slug, status, sort_order
 
@@ -364,114 +393,160 @@ Nhiều địa chỉ cho customer: shipping address, billing address
 - name, slug, logo_url, status
 
 **products**
-- name, slug, short_description, description, brand_id, status, publish_status, metadata fields
+- name, slug, short_description, description, brand_id, status, publish_status, metadata fields (seo_title, seo_description, seo_keywords)
 
 **product_variants**
-- product_id, sku, barcode, variant_name, base_price, sale_price, compare_at_price, status
+- product_id, sku, barcode, variant_name, base_price, sale_price, compare_at_price, weight, status
 
 **product_media**
 - product_id, variant_id (nullable), media_url, media_type, sort_order, is_primary
 
 **product_attributes**
-- name, code, type
+- name, code, type (VARIANT_OPTION | DESCRIPTIVE)
 
 **product_attribute_values**
-- attribute_id, value, display_value
+- attribute_id, value, display_value, color_hex (nullable, nếu là màu)
 
 **variant_attribute_values**
 - variant_id, attribute_value_id
 
-### 14.3. Inventory
+**collections**
+- name, slug, description, image_url, status, sort_order, start_at (nullable), end_at (nullable)
+
+**collection_products**
+- collection_id, product_id, sort_order
+
+### 15.3. Inventory
 **warehouses**
 - name, code, location, status
 
 **inventories**
-- variant_id, warehouse_id, on_hand, reserved, available
+- variant_id, warehouse_id, on_hand, reserved, available, version
 
 **inventory_reservations**
-- variant_id, order_id hoặc cart/session reference, quantity, expires_at, status
+- variant_id, order_id, quantity, expires_at, status
 
 **stock_movements**
-- variant_id, warehouse_id, movement_type, quantity, reference_type, reference_id, note
+- variant_id, warehouse_id, movement_type, quantity, reference_type, reference_id, reason, note, created_by, created_at
 
-### 14.4. Commerce
+### 15.4. Commerce
 **carts**
 - customer_id, status
 
 **cart_items**
 - cart_id, variant_id, quantity
+- Lưu ý: KHÔNG lưu giá trong cart_items, giá lấy từ variant tại thời điểm checkout
 
 **wishlists**
 - customer_id
 
 **wishlist_items**
-- wishlist_id, product_id hoặc variant_id
+- wishlist_id, product_id, added_at
 
 **orders**
-- order_code, customer_id, order_status, payment_status, shipment_status, subtotal_amount, discount_amount, shipping_fee, total_amount, note, voucher_code snapshot
+- order_code, customer_id, order_status, payment_status, shipment_status
+- subtotal_amount, discount_amount, shipping_fee, total_amount
+- voucher_code, voucher_discount_amount (snapshot)
+- note, source (MOBILE_APP, CUSTOMER_WEB, ADMIN_WEB)
+- Snapshot địa chỉ giao hàng:
+  - shipping_recipient_name
+  - shipping_recipient_phone
+  - shipping_address_line
+  - shipping_ward
+  - shipping_district
+  - shipping_province
+  - shipping_country (mặc định VN)
 
 **order_items**
-- order_id, product_id, variant_id, product_name, variant_name, sku, unit_price, quantity, discount_amount, line_total
+- order_id, product_id, variant_id
+- product_name, variant_name, sku (snapshot)
+- unit_price, quantity, discount_amount, line_total (snapshot)
+- thumbnail_url (snapshot, optional)
 
 **shipments**
 - order_id, shipment_code, carrier, tracking_number, shipping_fee, shipment_status
+- shipped_at, delivered_at, estimated_delivery_at
+- note
 
 **invoices**
-- order_id, invoice_code, invoice_status, invoice_amount
+- order_id, invoice_code, invoice_status, invoice_amount, tax_amount
+- issued_at
 
-### 14.5. Payment
+### 15.5. Payment
 **payments**
-- order_id, payment_method, payment_provider, payment_status, payable_amount, paid_amount
+- order_id, payment_method, payment_provider, payment_status
+- payable_amount, paid_amount
+- external_reference (provider's transaction ID)
+- paid_at
 
 **payment_transactions**
-- payment_id, transaction_code, provider_transaction_id, transaction_status, amount, request_payload, response_payload
+- payment_id, transaction_code, provider_transaction_id
+- transaction_status, amount
+- request_payload (JSON), response_payload (JSON)
+- created_at
 
 **refunds**
-- payment_id, refund_code, refund_amount, refund_status
+- payment_id, order_id, refund_code
+- refund_amount, refund_status
+- refund_reason, refund_note
+- processed_by, processed_at, created_at
 
-### 14.6. Promotion
+### 15.6. Promotion
 **promotions**
-- name, code, description, promotion_type, status, start_at, end_at
+- name, code, description, promotion_type, status, start_at, end_at, priority
 
 **promotion_rules**
-- promotion_id, rule_type, condition_json hoặc normalized tables, discount_type, discount_value, max_discount_amount
+- promotion_id, rule_type, condition_json, discount_type, discount_value, max_discount_amount
 
 **vouchers**
-- code, voucher_type, discount_type, discount_value, min_order_amount, max_discount_amount, usage_limit, per_user_limit, start_at, end_at, status
+- code, voucher_type, discount_type, discount_value
+- min_order_value, max_discount_amount
+- usage_limit, per_user_limit, used_count
+- applicable_to (ALL, CATEGORY, PRODUCT)
+- start_at, end_at, status
 
 **voucher_usages**
-- voucher_id, customer_id, order_id, used_at
+- voucher_id, customer_id, order_id, discount_amount, used_at
 
-### 14.7. Engagement
+### 15.7. Engagement
 **reviews**
-- product_id, variant_id (nullable), customer_id, order_id, rating, comment, status
+- product_id, variant_id (nullable), customer_id, order_id
+- rating (1-5), comment, status (PENDING, APPROVED, REJECTED)
+- is_verified_purchase
 
 **notifications**
-- customer_id, type, title, content, read_at
+- customer_id (nullable, null = broadcast), type, title, content
+- is_read, read_at, created_at
 
 **banners**
-- title, image_url, redirect_url, sort_order, status
+- title, image_url, redirect_url, sort_order, status, position
+- start_at (nullable), end_at (nullable)
 
 **audit_logs**
-- actor_id, actor_type, action, entity_type, entity_id, payload, created_at
+- actor_id, actor_type (USER, SYSTEM), action, entity_type, entity_id
+- old_value (JSON, nullable), new_value (JSON, nullable)
+- ip_address, created_at
 
 ---
 
-## 15. Migration convention
+## 16. Migration convention
 
-### 15.1. Dùng Flyway
+### 16.1. Dùng Flyway
 Mọi thay đổi schema phải qua migration file.
 
-### 15.2. Tên file
+### 16.2. Tên file
 ```
 V1__init_schema.sql
 V2__create_users_roles_tables.sql
 V3__create_catalog_tables.sql
 V4__create_inventory_tables.sql
 V5__create_order_tables.sql
+V6__create_payment_tables.sql
+V7__create_promotion_tables.sql
+V8__create_engagement_tables.sql
 ```
 
-### 15.3. Quy tắc
+### 16.3. Quy tắc
 - 1 migration = 1 mục tiêu rõ ràng
 - không sửa migration cũ đã chạy ở shared env
 - muốn thay đổi thì tạo migration mới
@@ -479,7 +554,7 @@ V5__create_order_tables.sql
 
 ---
 
-## 16. Sample index recommendations
+## 17. Sample index recommendations
 
 **products**
 - unique index slug
@@ -521,11 +596,15 @@ V5__create_order_tables.sql
 - index start_at
 - index end_at
 
+**voucher_usages**
+- index (voucher_id, customer_id)
+- index order_id
+
 ---
 
-## 17. DDL ví dụ
+## 18. DDL ví dụ
 
-### 17.1. products
+### 18.1. products
 ```sql
 CREATE TABLE products (
     id BIGINT PRIMARY KEY AUTO_INCREMENT,
@@ -536,6 +615,9 @@ CREATE TABLE products (
     brand_id BIGINT NULL,
     status VARCHAR(50) NOT NULL,
     publish_status VARCHAR(50) NOT NULL,
+    seo_title VARCHAR(255) NULL,
+    seo_description VARCHAR(500) NULL,
+    seo_keywords VARCHAR(500) NULL,
     created_at DATETIME NOT NULL,
     created_by VARCHAR(100) NULL,
     updated_at DATETIME NOT NULL,
@@ -547,7 +629,7 @@ CREATE TABLE products (
 );
 ```
 
-### 17.2. product_variants
+### 18.2. product_variants
 ```sql
 CREATE TABLE product_variants (
     id BIGINT PRIMARY KEY AUTO_INCREMENT,
@@ -558,6 +640,7 @@ CREATE TABLE product_variants (
     base_price DECIMAL(18,2) NOT NULL,
     sale_price DECIMAL(18,2) NULL,
     compare_at_price DECIMAL(18,2) NULL,
+    weight DECIMAL(10,2) NULL,
     status VARCHAR(50) NOT NULL,
     created_at DATETIME NOT NULL,
     created_by VARCHAR(100) NULL,
@@ -572,7 +655,7 @@ CREATE TABLE product_variants (
 );
 ```
 
-### 17.3. inventories
+### 18.3. inventories
 ```sql
 CREATE TABLE inventories (
     id BIGINT PRIMARY KEY AUTO_INCREMENT,
@@ -581,6 +664,7 @@ CREATE TABLE inventories (
     on_hand INT NOT NULL DEFAULT 0,
     reserved INT NOT NULL DEFAULT 0,
     available INT NOT NULL DEFAULT 0,
+    version BIGINT NOT NULL DEFAULT 0,
     updated_at DATETIME NOT NULL,
     CONSTRAINT uq_inventories_variant_warehouse UNIQUE (variant_id, warehouse_id),
     CONSTRAINT fk_inventories_variant
@@ -590,7 +674,7 @@ CREATE TABLE inventories (
 );
 ```
 
-### 17.4. orders
+### 18.4. orders
 ```sql
 CREATE TABLE orders (
     id BIGINT PRIMARY KEY AUTO_INCREMENT,
@@ -603,7 +687,18 @@ CREATE TABLE orders (
     discount_amount DECIMAL(18,2) NOT NULL DEFAULT 0,
     shipping_fee DECIMAL(18,2) NOT NULL DEFAULT 0,
     total_amount DECIMAL(18,2) NOT NULL,
+    voucher_code VARCHAR(100) NULL,
+    voucher_discount_amount DECIMAL(18,2) NULL,
     note VARCHAR(1000) NULL,
+    source VARCHAR(50) NOT NULL DEFAULT 'CUSTOMER_WEB',
+    -- Snapshot địa chỉ giao hàng
+    shipping_recipient_name VARCHAR(255) NOT NULL,
+    shipping_recipient_phone VARCHAR(20) NOT NULL,
+    shipping_address_line VARCHAR(500) NOT NULL,
+    shipping_ward VARCHAR(100) NULL,
+    shipping_district VARCHAR(100) NOT NULL,
+    shipping_province VARCHAR(100) NOT NULL,
+    shipping_country VARCHAR(10) NOT NULL DEFAULT 'VN',
     created_at DATETIME NOT NULL,
     created_by VARCHAR(100) NULL,
     updated_at DATETIME NOT NULL,
@@ -614,7 +709,7 @@ CREATE TABLE orders (
 );
 ```
 
-### 17.5. order_items
+### 18.5. order_items
 ```sql
 CREATE TABLE order_items (
     id BIGINT PRIMARY KEY AUTO_INCREMENT,
@@ -624,6 +719,7 @@ CREATE TABLE order_items (
     product_name VARCHAR(255) NOT NULL,
     variant_name VARCHAR(255) NOT NULL,
     sku VARCHAR(100) NOT NULL,
+    thumbnail_url VARCHAR(500) NULL,
     unit_price DECIMAL(18,2) NOT NULL,
     quantity INT NOT NULL,
     discount_amount DECIMAL(18,2) NOT NULL DEFAULT 0,
@@ -637,19 +733,54 @@ CREATE TABLE order_items (
 );
 ```
 
+### 18.6. collections
+```sql
+CREATE TABLE collections (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    name VARCHAR(255) NOT NULL,
+    slug VARCHAR(255) NOT NULL,
+    description TEXT NULL,
+    image_url VARCHAR(500) NULL,
+    status VARCHAR(50) NOT NULL DEFAULT 'ACTIVE',
+    sort_order INT NOT NULL DEFAULT 0,
+    start_at DATETIME NULL,
+    end_at DATETIME NULL,
+    created_at DATETIME NOT NULL,
+    created_by VARCHAR(100) NULL,
+    updated_at DATETIME NOT NULL,
+    updated_by VARCHAR(100) NULL,
+    is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
+    deleted_at DATETIME NULL,
+    deleted_by VARCHAR(100) NULL,
+    CONSTRAINT uq_collections_slug UNIQUE (slug)
+);
+
+CREATE TABLE collection_products (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    collection_id BIGINT NOT NULL,
+    product_id BIGINT NOT NULL,
+    sort_order INT NOT NULL DEFAULT 0,
+    CONSTRAINT uq_collection_products UNIQUE (collection_id, product_id),
+    CONSTRAINT fk_collection_products_collection
+        FOREIGN KEY (collection_id) REFERENCES collections(id),
+    CONSTRAINT fk_collection_products_product
+        FOREIGN KEY (product_id) REFERENCES products(id)
+);
+```
+
 ---
 
-## 18. Performance notes
+## 19. Performance notes
 
-### 18.1. Tránh query N+1
+### 19.1. Tránh query N+1
 - dùng fetch join hợp lý
 - dùng projection khi list
 - không eager mọi relation
 
-### 18.2. Không lưu dữ liệu tính toán dư thừa nếu không cần
+### 19.2. Không lưu dữ liệu tính toán dư thừa nếu không cần
 Nhưng với các giá trị nghiệp vụ cần snapshot như order totals thì phải lưu.
 
-### 18.3. Báo cáo nặng
+### 19.3. Báo cáo nặng
 Các query dashboard/report có thể:
 - tối ưu index riêng
 - dùng materialized approach sau này
@@ -657,7 +788,7 @@ Các query dashboard/report có thể:
 
 ---
 
-## 19. Backup & data safety
+## 20. Backup & data safety
 
 Production cần có:
 - backup định kỳ
@@ -668,10 +799,12 @@ Production cần có:
 
 ---
 
-## 20. Nguyên tắc cuối cùng
+## 21. Nguyên tắc cuối cùng
 
 1. Database phải phản ánh đúng domain.
 2. Dữ liệu giao dịch phải ưu tiên tính đúng đắn hơn tối ưu sớm.
 3. Không thiết kế quá phức tạp ở MVP.
 4. Nhưng các bảng cốt lõi như product_variants, order_items, payment_transactions, stock_movements phải model đúng ngay từ đầu.
-5. Mọi thay đổi schema phải có migration và review.
+5. Bảng `orders` phải snapshot đầy đủ địa chỉ giao hàng — không foreign key sang `addresses`.
+6. Bảng `inventories` phải có `version` cho optimistic locking.
+7. Mọi thay đổi schema phải có migration và review.

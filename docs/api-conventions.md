@@ -112,6 +112,29 @@ Nếu endpoint không cần trả object cụ thể:
 }
 ```
 
+### 4.4. Batch operation response
+
+Với endpoint xử lý nhiều item một lúc:
+
+```json
+{
+  "success": true,
+  "code": "SUCCESS",
+  "message": "Batch operation completed",
+  "data": {
+    "totalRequested": 5,
+    "succeeded": 4,
+    "failed": 1,
+    "results": [
+      { "id": 1, "status": "SUCCESS" },
+      { "id": 2, "status": "SUCCESS" },
+      { "id": 3, "status": "FAILED", "reason": "INVENTORY_NOT_ENOUGH" }
+    ]
+  },
+  "timestamp": "2026-04-06T10:00:00Z"
+}
+```
+
 ---
 
 ## 5. HTTP status code conventions
@@ -130,6 +153,7 @@ Nếu endpoint không cần trả object cụ thể:
 - `404 Not Found`: không tìm thấy tài nguyên
 - `409 Conflict`: trùng dữ liệu hoặc trạng thái conflict
 - `422 Unprocessable Entity`: business validation fail
+- `429 Too Many Requests`: rate limit exceeded
 
 **Lỗi server**
 
@@ -151,6 +175,7 @@ Nên chuẩn hóa code trong error response.
 - `NOT_FOUND`
 - `VALIDATION_ERROR`
 - `CONFLICT`
+- `RATE_LIMIT_EXCEEDED`
 - `INTERNAL_SERVER_ERROR`
 
 **Nhóm auth**
@@ -159,6 +184,9 @@ Nên chuẩn hóa code trong error response.
 - `TOKEN_INVALID`
 - `REFRESH_TOKEN_INVALID`
 - `ACCOUNT_DISABLED`
+- `EMAIL_NOT_VERIFIED`
+- `OTP_INVALID`
+- `OTP_EXPIRED`
 
 **Nhóm product**
 - `PRODUCT_NOT_FOUND`
@@ -176,18 +204,26 @@ Nên chuẩn hóa code trong error response.
 - `ORDER_STATUS_INVALID`
 - `ORDER_CANNOT_CANCEL`
 - `ORDER_CANNOT_COMPLETE`
+- `ORDER_CANNOT_RETURN`
 
 **Nhóm payment**
 - `PAYMENT_NOT_FOUND`
 - `PAYMENT_FAILED`
 - `PAYMENT_ALREADY_PROCESSED`
 - `PAYMENT_CALLBACK_INVALID`
+- `PAYMENT_SIGNATURE_INVALID`
 
 **Nhóm promotion**
 - `VOUCHER_INVALID`
 - `VOUCHER_EXPIRED`
 - `VOUCHER_USAGE_LIMIT_EXCEEDED`
 - `VOUCHER_NOT_APPLICABLE`
+- `VOUCHER_MIN_ORDER_NOT_MET`
+
+**Nhóm refund**
+- `REFUND_NOT_FOUND`
+- `REFUND_ALREADY_PROCESSED`
+- `REFUND_AMOUNT_INVALID`
 
 ---
 
@@ -269,7 +305,7 @@ Ví dụ:
 GET /api/v1/products?keyword=shirt&categoryId=1&brandId=2&minPrice=100000&maxPrice=500000&inStock=true
 ```
 
-Các filter gợi ý: `keyword`, `categoryId`, `brandId`, `status`, `minPrice`, `maxPrice`, `color`, `size`, `inStock`, `isFeatured`
+Các filter gợi ý: `keyword`, `categoryId`, `brandId`, `collectionId`, `status`, `minPrice`, `maxPrice`, `color`, `size`, `inStock`, `isFeatured`
 
 ### 9.2. Order filters
 
@@ -329,14 +365,56 @@ Có thể dùng:
 
 ---
 
-## 12. Validation convention
+## 12. Webhook / Payment Callback convention
 
-### 12.1. DTO validation
+### 12.1. Prefix
+
+Endpoint nhận callback từ payment gateway dùng prefix riêng:
+
+```
+POST /api/v1/webhooks/payment/{provider}
+```
+
+Ví dụ:
+- `POST /api/v1/webhooks/payment/vnpay`
+- `POST /api/v1/webhooks/payment/momo`
+- `POST /api/v1/webhooks/payment/stripe`
+
+### 12.2. Bắt buộc validate chữ ký
+
+Mọi callback phải validate signature/HMAC từ provider trước khi xử lý bất cứ nghiệp vụ nào.  
+Nếu signature không hợp lệ → trả `400` ngay, log cảnh báo.
+
+### 12.3. Trả response nhanh
+
+Webhook endpoint phải trả `200 OK` nhanh nhất có thể.  
+Không block response chờ xử lý nghiệp vụ nặng. Xử lý async hoặc queue nếu cần.
+
+### 12.4. Idempotent
+
+Nếu cùng transaction gọi callback 2 lần (provider retry):
+- hệ thống phải detect và bỏ qua lần xử lý thứ hai
+- không double-confirm, không double-credit
+
+### 12.5. Log đầy đủ
+
+Mọi callback phải log:
+- provider
+- transaction reference
+- payload nhận được
+- kết quả xử lý
+- timestamp
+
+---
+
+## 13. Validation convention
+
+### 13.1. DTO validation
 
 Request DTO phải validate bằng annotation:
 `@NotNull`, `@NotBlank`, `@Size`, `@Email`, `@Positive`, `@Min`, `@Max`, custom validator nếu cần.
 
-### 12.2. Business validation
+### 13.2. Business validation
 
 Bắt buộc kiểm tra thêm ở service:
 - variant có tồn tại không
@@ -345,7 +423,7 @@ Bắt buộc kiểm tra thêm ở service:
 - voucher còn hiệu lực không
 - trạng thái order có cho phép chuyển không
 
-### 12.3. Validation error format
+### 13.3. Validation error format
 
 ```json
 {
@@ -369,13 +447,13 @@ Bắt buộc kiểm tra thêm ở service:
 
 ---
 
-## 13. Date time convention
+## 14. Date time convention
 
-### 13.1. Backend timezone
+### 14.1. Backend timezone
 
 Khuyến nghị backend thống nhất dùng **UTC** cho timestamp hệ thống.
 
-### 13.2. Response format
+### 14.2. Response format
 
 Dùng **ISO-8601**:
 ```json
@@ -384,7 +462,7 @@ Dùng **ISO-8601**:
 }
 ```
 
-### 13.3. Date-only fields
+### 14.3. Date-only fields
 
 Các field chỉ có ngày (`birthDate`, `startDate`, `endDate`) nên dùng:
 ```json
@@ -393,29 +471,29 @@ Các field chỉ có ngày (`birthDate`, `startDate`, `endDate`) nên dùng:
 }
 ```
 
-### 13.4. Không dùng format tùy biến nếu không cần
+### 14.4. Không dùng format tùy biến nếu không cần
 
 Tránh: `06/04/2026`, `04-06-2026`
 
 ---
 
-## 14. Versioning convention
+## 15. Versioning convention
 
-### 14.1. Version theo URL
+### 15.1. Version theo URL
 
 ```
 /api/v1
 /api/v2
 ```
 
-### 14.2. Khi nào tạo version mới
+### 15.2. Khi nào tạo version mới
 
 Tạo v2 nếu có **breaking change**:
 - đổi contract response/request
 - bỏ field cũ
 - thay đổi semantics endpoint
 
-### 14.3. Non-breaking changes
+### 15.3. Non-breaking changes
 
 Có thể giữ nguyên version nếu:
 - thêm field response không ảnh hưởng client cũ
@@ -424,7 +502,7 @@ Có thể giữ nguyên version nếu:
 
 ---
 
-## 15. REST method convention
+## 16. REST method convention
 
 - **GET**: Lấy dữ liệu
 - **POST**: Tạo mới hoặc thao tác không thuần CRUD
@@ -434,13 +512,13 @@ Có thể giữ nguyên version nếu:
 
 ---
 
-## 16. File upload convention
+## 17. File upload convention
 
-### 16.1. Request type
+### 17.1. Request type
 
 Dùng `multipart/form-data`
 
-### 16.2. Response ví dụ
+### 17.2. Response ví dụ
 
 ```json
 {
@@ -457,35 +535,36 @@ Dùng `multipart/form-data`
 }
 ```
 
-### 16.3. Security
+### 17.3. Security
 
-- kiểm tra content type
-- kiểm tra kích thước file
+- kiểm tra content type (whitelist: image/jpeg, image/png, image/webp)
+- kiểm tra kích thước file (ví dụ: max 5MB cho ảnh product)
 - sanitize filename
-- không cho upload file thực thi nguy hiểm
+- không cho upload file thực thi nguy hiểm (.exe, .php, .sh...)
+- lưu file với tên đã được rename (UUID), không dùng tên gốc của user
 
 ---
 
-## 17. Error handling convention
+## 18. Error handling convention
 
-### 17.1. Global exception handler
+### 18.1. Global exception handler
 
 Tất cả exception phải đi qua handler chung.
 
-### 17.2. Không trả stacktrace ở production
+### 18.2. Không trả stacktrace ở production
 
 Không được lộ:
 - stacktrace
 - SQL query
 - internal server path chi tiết nhạy cảm
 
-### 17.3. Log đầy đủ nội bộ
+### 18.3. Log đầy đủ nội bộ
 
 Phía server vẫn phải log đủ để debug.
 
 ---
 
-## 18. API cho order status transition
+## 19. API cho order status transition
 
 Không nên dùng endpoint chung chung kiểu `PATCH /api/v1/orders/{id}` cho các trạng thái quan trọng.
 
@@ -494,12 +573,15 @@ Nên cân nhắc:
 - `POST /api/v1/orders/{id}/confirm`
 - `POST /api/v1/orders/{id}/cancel`
 - `POST /api/v1/orders/{id}/complete`
+- `POST /api/v1/orders/{id}/request-return`
+- `POST /api/v1/admin/orders/{id}/approve-return`
+- `POST /api/v1/admin/orders/{id}/refund`
 
 Hoặc vẫn dùng `PATCH /api/v1/orders/{id}/status` nhưng phải validate **state machine** chặt chẽ.
 
 ---
 
-## 19. Swagger/OpenAPI convention
+## 20. Swagger/OpenAPI convention
 
 Mỗi endpoint cần có:
 - `summary`
@@ -511,7 +593,7 @@ Mỗi endpoint cần có:
 
 ---
 
-## 20. Search convention
+## 21. Search convention
 
 Khuyến nghị phase đầu:
 - Dùng chung với list endpoint + filter `keyword`
@@ -519,7 +601,7 @@ Khuyến nghị phase đầu:
 
 ---
 
-## 21. Security convention cho admin API
+## 22. Security convention cho admin API
 
 **Prefix:**
 ```
@@ -532,55 +614,78 @@ Yêu cầu:
 
 ---
 
-## 22. Public vs protected API
+## 23. Public vs protected API
 
 **Public API:**
-- auth register/login
+- auth register/login/forgot-password/reset-password
 - product listing, product detail
-- category listing, brand listing
+- category listing, brand listing, collection listing
 
 **Protected customer API:**
-- cart, address, checkout, order history, review
+- cart, wishlist, address, checkout, order history, review
 
 **Protected admin API:**
 - product management, inventory management, order management, voucher management, reporting
 
 ---
 
-## 23. Example endpoint groups
+## 24. Example endpoint groups
 
 **Auth**
 - `POST /api/v1/auth/register`
 - `POST /api/v1/auth/login`
 - `POST /api/v1/auth/refresh-token`
 - `POST /api/v1/auth/logout`
+- `POST /api/v1/auth/forgot-password`
+- `POST /api/v1/auth/reset-password`
+- `POST /api/v1/auth/verify-email`
 
 **Products**
 - `GET /api/v1/products`
 - `GET /api/v1/products/{id}`
 - `GET /api/v1/products/{id}/variants`
+- `GET /api/v1/products/{id}/reviews`
+
+**Collections**
+- `GET /api/v1/collections`
+- `GET /api/v1/collections/{slug}`
+- `GET /api/v1/collections/{slug}/products`
 
 **Cart**
 - `GET /api/v1/cart`
 - `POST /api/v1/cart/items`
 - `PATCH /api/v1/cart/items/{id}`
 - `DELETE /api/v1/cart/items/{id}`
+- `DELETE /api/v1/cart` (clear cart)
+
+**Wishlist**
+- `GET /api/v1/wishlist`
+- `POST /api/v1/wishlist/items`
+- `DELETE /api/v1/wishlist/items/{productId}`
 
 **Orders**
 - `POST /api/v1/orders`
 - `GET /api/v1/orders`
 - `GET /api/v1/orders/{id}`
 - `POST /api/v1/orders/{id}/cancel`
+- `POST /api/v1/orders/{id}/request-return`
+
+**Payment**
+- `POST /api/v1/payments/initiate`
+- `GET /api/v1/payments/{orderId}`
+- `POST /api/v1/webhooks/payment/{provider}`
 
 **Admin**
 - `POST /api/v1/admin/products`
 - `PATCH /api/v1/admin/products/{id}`
 - `PATCH /api/v1/admin/orders/{id}/status`
 - `POST /api/v1/admin/inventories/adjust`
+- `POST /api/v1/admin/orders/{id}/approve-return`
+- `POST /api/v1/admin/orders/{id}/refund`
 
 ---
 
-## 24. Contract stability rule
+## 25. Contract stability rule
 
 Khi frontend/mobile đã dùng API:
 - Không đổi field name tùy tiện
@@ -590,11 +695,11 @@ Khi frontend/mobile đã dùng API:
 
 ---
 
-## 25. List API — Filter, Pageable, and Naming Rules
+## 26. List API — Filter, Pageable, and Naming Rules
 
 Áp dụng cho **tất cả** endpoint trả danh sách phân trang.
 
-### 25.1. Tất cả list API phải hỗ trợ filter
+### 26.1. Tất cả list API phải hỗ trợ filter
 
 Mọi `GET` endpoint trả `PagedResponse<T>` phải nhận một Filter DTO làm query parameter.
 
@@ -608,7 +713,7 @@ public ApiResponse<PagedResponse<XxxResponse>> getXxxs(
 }
 ```
 
-### 25.2. Pageable chuẩn — dùng Spring Web
+### 26.2. Pageable chuẩn — dùng Spring Web
 
 **Bắt buộc** dùng `@PageableDefault` thay cho `@RequestParam int page/size/sort/direction` thủ công.
 
@@ -623,33 +728,11 @@ public ApiResponse<PagedResponse<XxxResponse>> getXxxs(
 @RequestParam(defaultValue = "desc") String direction
 ```
 
-Client dùng cú pháp Spring chuẩn:
-```
-GET /api/v1/admin/invoices?sort=issuedAt,desc&page=0&size=20
-```
-
-### 25.3. Sử dụng JPA Specification cho JPA modules
+### 26.3. Sử dụng JPA Specification cho JPA modules
 
 Nếu repository extends `JpaSpecificationExecutor<T>`, phải tạo `XxxSpecification` để xử lý filter.
 
-```java
-// Specification pattern chuẩn
-public class XxxSpecification {
-    private XxxSpecification() {}
-
-    public static Specification<Xxx> withFilter(XxxFilter filter) {
-        return (root, query, cb) -> {
-            List<Predicate> predicates = new ArrayList<>();
-            // add predicates based on non-null filter fields
-            return cb.and(predicates.toArray(new Predicate[0]));
-        };
-    }
-}
-```
-
-**Không dùng Specification cho JDBC/native query repositories** — giữ nguyên query method.
-
-### 25.4. Naming convention cho service methods
+### 26.4. Naming convention cho service methods
 
 Phương thức service trả danh sách phân trang **phải** đặt tên theo pattern `get{Domain}s(filter, pageable)`:
 
@@ -658,23 +741,9 @@ Phương thức service trả danh sách phân trang **phải** đặt tên theo
 | `listInvoices()` | `getInvoices()` |
 | `listShipments()` | `getShipments()` |
 | `listPromotions()` | `getPromotions()` |
-| `listVouchers()` | `getVouchers()` |
-| `listPayments()` | `getPayments()` |
 | `getAll()` | `getProducts()` |
 
-### 25.5. Controller method naming
-
-```java
-// Đúng
-public ApiResponse<PagedResponse<OrderResponse>> getOrders(...)
-public ApiResponse<PagedResponse<InvoiceResponse>> getInvoices(...)
-
-// Sai
-public ApiResponse<PagedResponse<OrderResponse>> list(...)
-public ApiResponse<PagedResponse<InvoiceResponse>> listInvoices(...)
-```
-
-### 25.6. Các modules đã áp dụng Specification
+### 26.5. Các modules đã áp dụng Specification
 
 | Module | Filter DTO | Specification |
 |--------|-----------|---------------|
@@ -686,13 +755,12 @@ public ApiResponse<PagedResponse<InvoiceResponse>> listInvoices(...)
 | promotion | `PromotionFilter` | `PromotionSpecification` |
 | voucher | `VoucherFilter` | `VoucherSpecification` |
 | review | `ReviewFilter` | `ReviewSpecification` |
+| collection | `CollectionFilter` | `CollectionSpecification` |
 
-### 25.7. Modules không dùng Specification (JPQL custom query)
+### 26.6. Modules không dùng Specification (JPQL custom query)
 
 | Module | Lý do |
 |--------|-------|
-| order (customer) | Dùng `@Query` JPQL với JOIN FETCH — không thay đổi repository |
+| order (customer) | Dùng `@Query` JPQL với JOIN FETCH |
 | order (admin) | Dùng `@Query` JPQL với JOIN FETCH customer + user |
 | stock movement | Dùng `@Query` JPQL |
-
----
