@@ -5,6 +5,7 @@
 Đây là backend cho hệ thống **Web bán quần áo đa nền tảng**, phục vụ:
 
 - **Admin Web**: ReactJS
+- **Customer Web**: ReactJS
 - **Mobile App**: React Native
 - **Backend API**: Java Spring Boot (triển khai trước)
 
@@ -14,10 +15,11 @@ Project tập trung vào các nghiệp vụ cốt lõi của e-commerce thời t
 
 - Authentication / Authorization
 - User / Customer
-- Product / Category / Brand
+- Product / Category / Brand / Collection
 - Product Variant (size, màu, SKU)
 - Inventory
 - Cart
+- Wishlist
 - Order / OrderItem
 - Payment / PaymentTransaction
 - Promotion / Voucher / Coupon
@@ -32,7 +34,7 @@ Project tập trung vào các nghiệp vụ cốt lõi của e-commerce thời t
 
 Mục tiêu của hệ thống:
 
-1. Cung cấp API ổn định cho Admin Web và Mobile App.
+1. Cung cấp API ổn định cho Admin Web, Customer Web và Mobile App.
 2. Hỗ trợ bán sản phẩm thời trang có **biến thể** như:
    - màu sắc
    - kích thước
@@ -114,8 +116,10 @@ src/main/java/com/fit/fashion_shop
 │   ├── brand
 │   ├── product
 │   ├── product_variant
+│   ├── collection
 │   ├── inventory
 │   ├── cart
+│   ├── wishlist
 │   ├── order
 │   ├── payment
 │   ├── promotion
@@ -190,19 +194,31 @@ OrderItem phải lưu snapshot dữ liệu tại thời điểm đặt hàng:
 
 Không phụ thuộc hoàn toàn vào dữ liệu product hiện tại.
 
-### 5.4. Payment design
+### 5.4. Order address snapshot
+Order phải lưu snapshot địa chỉ giao hàng tại thời điểm đặt hàng:
+- recipient_name
+- recipient_phone
+- full address (street, ward, district, province)
+
+Không lưu foreign key trỏ về bảng `addresses` vì customer có thể sửa/xóa địa chỉ sau khi đặt hàng.
+
+### 5.5. Cart item price
+`CartItem` **không** lưu giá cố định. Giá phải được tính lại từ `ProductVariant` tại thời điểm checkout.  
+Nếu cần hiển thị giá trong giỏ, lấy từ variant hiện tại, không cache trong cart_items.
+
+### 5.6. Payment design
 Không chỉ có bảng `payments`. Bắt buộc nên có:
 - `payments`
 - `payment_transactions`
 
-### 5.5. Promotion design
+### 5.7. Promotion design
 Phân biệt:
 - **Promotion**: chương trình khuyến mãi
 - **Voucher**: mã giảm giá
 - **PromotionRule**: điều kiện áp dụng
 - **VoucherUsage**: lịch sử sử dụng
 
-### 5.6. Soft delete
+### 5.8. Soft delete
 Áp dụng soft delete cho các bảng cấu hình / dữ liệu quản trị:
 - users
 - products
@@ -212,6 +228,9 @@ Phân biệt:
 - banners
 
 Không lạm dụng soft delete cho các bảng log lớn.
+
+### 5.9. Optimistic locking cho inventory
+Bảng `inventories` phải có cột `version` (`@Version` của JPA) để tránh oversell khi concurrent requests.
 
 ---
 
@@ -233,11 +252,13 @@ Không lạm dụng soft delete cho các bảng log lớn.
 - product_attributes
 - product_attribute_values
 - collections
+- collection_products
 
 ### Commerce
 - carts
 - cart_items
 - wishlists
+- wishlist_items
 - orders
 - order_items
 - shipments
@@ -366,6 +387,13 @@ Dùng Bearer JWT:
 Authorization: Bearer <token>
 ```
 
+### 9.6. Payment callback / Webhook
+Endpoint nhận callback từ payment gateway phải:
+- có prefix riêng: `/api/v1/webhooks/payment/{provider}`
+- validate chữ ký (signature/HMAC) trước khi xử lý
+- trả `200 OK` nhanh, xử lý nghiệp vụ async hoặc sau đó
+- idempotent: không xử lý lặp cùng transaction
+
 ---
 
 ## 10. Error Handling Rules
@@ -418,9 +446,37 @@ Ví dụ:
 ### 11.5. Foreign key
 Phải có foreign key cho dữ liệu lõi. Không cascade delete bừa bãi.
 
+### 11.6. Optimistic locking
+Bảng có khả năng concurrent update cao phải có `version BIGINT`:
+- `inventories`
+
 ---
 
-## 12. Security Principles
+## 12. Caching Rules
+
+### 12.1. Dùng Redis làm cache layer
+Spring Cache (`@Cacheable`, `@CacheEvict`) kết hợp Redis.
+
+### 12.2. Những gì nên cache
+- danh sách category (ít thay đổi, đọc nhiều)
+- danh sách brand (ít thay đổi, đọc nhiều)
+- product detail (cache ngắn, evict khi update)
+- banner/homepage config
+
+### 12.3. Những gì không nên cache
+- cart (mỗi user khác nhau, thay đổi thường xuyên)
+- order (trạng thái thay đổi liên tục)
+- inventory (số lượng thay đổi liên tục, không cache giá trị tồn kho)
+
+### 12.4. TTL
+Định nghĩa TTL rõ ràng cho từng cache key. Không để TTL vô hạn.
+
+### 12.5. Evict
+Khi admin cập nhật product/category/brand phải evict cache liên quan ngay lập tức.
+
+---
+
+## 13. Security Principles
 - JWT access token ngắn hạn
 - refresh token dài hạn
 - password hash bằng BCrypt hoặc Argon2
@@ -430,10 +486,12 @@ Phải có foreign key cho dữ liệu lõi. Không cascade delete bừa bãi.
 - hạn chế upload file nguy hiểm
 - không log thông tin nhạy cảm
 - không trả stacktrace ra ngoài API production
+- OTP lưu trong Redis với TTL, không trong DB
+- rate limit cho auth endpoint, payment endpoint
 
 ---
 
-## 13. Environment Profiles
+## 14. Environment Profiles
 
 Có 2 profile chính:
 - `dev`
@@ -453,9 +511,9 @@ Có 2 profile chính:
 
 ---
 
-## 14. Logging & Audit
+## 15. Logging & Audit
 
-### 14.1. Logging
+### 15.1. Logging
 Cần log đủ các nhóm:
 - request id / trace id
 - auth failures
@@ -464,7 +522,7 @@ Cần log đủ các nhóm:
 - order status changes
 - admin critical actions
 
-### 14.2. Audit log
+### 15.2. Audit log
 Những hành động admin quan trọng cần audit:
 - tạo/sửa/xóa product
 - chỉnh tồn kho
@@ -475,9 +533,9 @@ Những hành động admin quan trọng cần audit:
 
 ---
 
-## 15. Testing Strategy
+## 16. Testing Strategy
 
-### 15.1. Unit test
+### 16.1. Unit test
 Ưu tiên cho:
 - service business logic
 - validator
@@ -485,7 +543,7 @@ Những hành động admin quan trọng cần audit:
 - inventory check
 - order lifecycle transitions
 
-### 15.2. Integration test
+### 16.2. Integration test
 Ưu tiên cho:
 - repository queries
 - API auth flow
@@ -493,7 +551,7 @@ Những hành động admin quan trọng cần audit:
 - payment callback flow
 - apply voucher flow
 
-### 15.3. Test data
+### 16.3. Test data
 Có thể chuẩn bị seed data cho:
 - roles
 - admin account
@@ -503,7 +561,7 @@ Có thể chuẩn bị seed data cho:
 
 ---
 
-## 16. Branching & Commit Conventions
+## 17. Branching & Commit Conventions
 
 ### Branch types
 - `dev`: branch chính của team
@@ -544,7 +602,7 @@ Complete #1001
 
 ---
 
-## 17. Development Priorities
+## 18. Development Priorities
 
 ### Phase 1 - MVP Backend
 - auth
@@ -567,6 +625,8 @@ Complete #1001
 - voucher
 - promotion
 - review
+- wishlist
+- collection
 
 ### Phase 3
 - notification
@@ -577,7 +637,7 @@ Complete #1001
 
 ---
 
-## 18. AI Collaboration Instructions
+## 19. AI Collaboration Instructions
 
 Khi AI hỗ trợ code trong project này, cần tuân thủ:
 
@@ -598,16 +658,17 @@ Khi AI hỗ trợ code trong project này, cần tuân thủ:
     - index
     - unique constraints
     - foreign keys
+    - version (nếu entity có concurrent update)
 7. Khi sửa business flow quan trọng phải kiểm tra ảnh hưởng:
     - order total
     - inventory
     - payment status
     - voucher usage
-8. Không viết code “tạm chạy được”; phải ưu tiên code rõ trách nhiệm, dễ mở rộng.
+8. Không viết code "tạm chạy được"; phải ưu tiên code rõ trách nhiệm, dễ mở rộng.
 
 ---
 
-## 19. What AI should do when implementing a feature
+## 20. What AI should do when implementing a feature
 
 Khi triển khai một tính năng mới, AI nên làm theo trình tự:
 
@@ -623,7 +684,7 @@ Khi triển khai một tính năng mới, AI nên làm theo trình tự:
 
 ---
 
-## 20. Out of Scope for Early Phase
+## 21. Out of Scope for Early Phase
 
 Những phần chưa ưu tiên ở giai đoạn đầu:
 - microservices
