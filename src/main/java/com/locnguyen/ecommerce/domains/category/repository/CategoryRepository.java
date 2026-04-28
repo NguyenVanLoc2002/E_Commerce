@@ -1,6 +1,7 @@
 package com.locnguyen.ecommerce.domains.category.repository;
 
 import com.locnguyen.ecommerce.domains.category.entity.Category;
+import com.locnguyen.ecommerce.domains.category.enums.CategoryStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.stereotype.Repository;
@@ -17,7 +18,7 @@ public interface CategoryRepository extends JpaRepository<Category, UUID>,
 
     Optional<Category> findBySlug(String slug);
 
-    List<Category> findByStatusOrderBySortOrderAsc(com.locnguyen.ecommerce.domains.category.enums.CategoryStatus status);
+    List<Category> findByStatusOrderBySortOrderAsc(CategoryStatus status);
 
     List<Category> findByParentIdOrderBySortOrderAsc(UUID parentId);
 }

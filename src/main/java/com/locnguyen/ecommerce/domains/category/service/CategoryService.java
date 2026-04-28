@@ -25,9 +25,12 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
 import java.util.List;
 
 import java.util.UUID;
+import java.util.stream.Collectors;
+
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -38,6 +41,11 @@ public class CategoryService {
     private final AuditLogService auditLogService;
 
     // ─── Public ───────────────────────────────────────────────────────────────
+
+    /**
+     * Get paginated categories with optional filters.
+     * Not cached since it's only used in admin panel and can have many combinations.
+     */
     public PagedResponse<CategoryResponse> getAllCategories(
             CategoryFilter filter,
             Pageable pageable
@@ -48,7 +56,6 @@ public class CategoryService {
         return PagedResponse.of(pageCategories.map(categoryMapper::toResponse));
     }
 
-
     /**
      * List all active categories ordered by sort order.
      * Cached for 30 minutes — evicted whenever any category is mutated.
@@ -57,7 +64,9 @@ public class CategoryService {
     @Transactional(readOnly = true)
     public List<CategoryResponse> getActiveCategories() {
         return categoryRepository.findByStatusOrderBySortOrderAsc(CategoryStatus.ACTIVE)
-                .stream().map(categoryMapper::toResponse).toList();
+                .stream()
+                .map(categoryMapper::toResponse)
+                .collect(Collectors.toCollection(ArrayList::new));
     }
 
     /**

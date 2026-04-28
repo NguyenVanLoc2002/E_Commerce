@@ -8,16 +8,19 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.extern.jackson.Jacksonized;
 
+import java.io.Serializable;
 import java.time.LocalDateTime;
 
 import java.util.UUID;
+
 @Getter
 @Builder
 @Jacksonized
 @AllArgsConstructor
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @Schema(description = "Category response")
-public class CategoryResponse {
+public class CategoryResponse implements Serializable {
+    private static final long serialVersionUID = 1L;
 
     private final UUID id;
     private final UUID parentId;

@@ -1,9 +1,7 @@
 package com.locnguyen.ecommerce.common.config;
 
-import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
-import com.fasterxml.jackson.databind.jsontype.BasicPolymorphicTypeValidator;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.locnguyen.ecommerce.common.constants.AppConstants;
 import org.springframework.cache.annotation.EnableCaching;
@@ -14,6 +12,7 @@ import org.springframework.data.redis.cache.RedisCacheManager;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.serializer.GenericJackson2JsonRedisSerializer;
+import org.springframework.data.redis.serializer.JdkSerializationRedisSerializer;
 import org.springframework.data.redis.serializer.RedisSerializationContext;
 import org.springframework.data.redis.serializer.StringRedisSerializer;
 
@@ -33,16 +32,12 @@ public class RedisConfig {
         mapper.registerModule(new JavaTimeModule());
         mapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
 
-        BasicPolymorphicTypeValidator ptv = BasicPolymorphicTypeValidator.builder()
-                .allowIfSubType("com.locnguyen.ecommerce")
-                .allowIfSubType("java.util")
-                .allowIfSubType("java.time")
-                .build();
+        GenericJackson2JsonRedisSerializer.registerNullValueSerializer(mapper, "@class");
 
-        mapper.activateDefaultTyping(
-                ptv,
+        mapper.activateDefaultTypingAsProperty(
+                mapper.getPolymorphicTypeValidator(),
                 ObjectMapper.DefaultTyping.NON_FINAL,
-                JsonTypeInfo.As.PROPERTY
+                "@class"
         );
 
         return new GenericJackson2JsonRedisSerializer(mapper);
@@ -67,8 +62,7 @@ public class RedisConfig {
 
     @Bean
     public RedisCacheManager cacheManager(
-            RedisConnectionFactory connectionFactory,
-            GenericJackson2JsonRedisSerializer redisJsonSerializer
+            RedisConnectionFactory connectionFactory
     ) {
         RedisCacheConfiguration defaultConfig = RedisCacheConfiguration.defaultCacheConfig()
                 .entryTtl(Duration.ofMinutes(10))
@@ -78,7 +72,7 @@ public class RedisConfig {
                                 .fromSerializer(new StringRedisSerializer()))
                 .serializeValuesWith(
                         RedisSerializationContext.SerializationPair
-                                .fromSerializer(redisJsonSerializer))
+                                .fromSerializer(new JdkSerializationRedisSerializer()))
                 .disableCachingNullValues();
 
         Map<String, RedisCacheConfiguration> cacheConfigurations = Map.of(
