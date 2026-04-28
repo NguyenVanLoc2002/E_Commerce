@@ -5,11 +5,12 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
 
+import java.util.UUID;
 @Data
 @Schema(description = "Update category request — only provided fields are updated")
 public class UpdateCategoryRequest {
 
-    private Long parentId;
+    private UUID parentId;
 
     @Size(max = 100)
     private String name;

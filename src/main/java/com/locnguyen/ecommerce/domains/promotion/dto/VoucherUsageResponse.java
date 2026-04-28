@@ -8,17 +8,18 @@ import lombok.Getter;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
+import java.util.UUID;
 @Getter
 @Builder
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @Schema(description = "Record of a single voucher redemption")
 public class VoucherUsageResponse {
 
-    private final Long id;
-    private final Long voucherId;
+    private final UUID id;
+    private final UUID voucherId;
     private final String voucherCode;
-    private final Long customerId;
-    private final Long orderId;
+    private final UUID customerId;
+    private final UUID orderId;
     private final BigDecimal discountAmount;
     private final LocalDateTime usedAt;
 }

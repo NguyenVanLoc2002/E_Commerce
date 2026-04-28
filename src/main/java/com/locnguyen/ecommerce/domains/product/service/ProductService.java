@@ -33,6 +33,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
+import java.util.UUID;
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -81,7 +82,7 @@ public class ProductService {
      */
     @Cacheable(value = AppConstants.CACHE_PRODUCT_DETAIL, key = "#id")
     @Transactional(readOnly = true)
-    public ProductDetailResponse getProductById(Long id) {
+    public ProductDetailResponse getProductById(UUID id) {
         Product product = productRepository.findDetailById(id)
                 .orElseThrow(() -> new AppException(ErrorCode.PRODUCT_NOT_FOUND));
 
@@ -130,7 +131,7 @@ public class ProductService {
             @CacheEvict(value = AppConstants.CACHE_PRODUCTS, allEntries = true)
     })
     @Transactional
-    public ProductDetailResponse updateProduct(Long id, UpdateProductRequest request) {
+    public ProductDetailResponse updateProduct(UUID id, UpdateProductRequest request) {
         Product product = findOrThrow(id);
 
         if (request.getName() != null) product.setName(request.getName().trim());
@@ -175,7 +176,7 @@ public class ProductService {
             @CacheEvict(value = AppConstants.CACHE_PRODUCTS, allEntries = true)
     })
     @Transactional
-    public void deleteProduct(Long id) {
+    public void deleteProduct(UUID id) {
         Product product = findOrThrow(id);
         String actor = SecurityUtils.getCurrentUsernameOrSystem();
         product.softDelete(actor);
@@ -193,18 +194,18 @@ public class ProductService {
     }
 
     @Transactional(readOnly = true)
-    public ProductDetailResponse getProductDetailAdmin(Long id) {
+    public ProductDetailResponse getProductDetailAdmin(UUID id) {
         return toDetailResponse(findOrThrow(id));
     }
 
     // ─── Internal ────────────────────────────────────────────────────────────
 
-    private Product findOrThrow(Long id) {
+    private Product findOrThrow(UUID id) {
         return productRepository.findById(id)
                 .orElseThrow(() -> new AppException(ErrorCode.PRODUCT_NOT_FOUND));
     }
 
-    private void setCategories(Product product, List<Long> categoryIds) {
+    private void setCategories(Product product, List<UUID> categoryIds) {
         product.getCategories().clear();
         if (categoryIds != null && !categoryIds.isEmpty()) {
             List<Category> categories = categoryRepository.findAllById(categoryIds);

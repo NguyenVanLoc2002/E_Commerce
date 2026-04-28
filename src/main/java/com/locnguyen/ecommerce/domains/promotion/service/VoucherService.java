@@ -32,6 +32,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
+import java.util.UUID;
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -71,7 +72,7 @@ public class VoucherService {
     }
 
     @Transactional
-    public VoucherResponse updateVoucher(Long voucherId, UpdateVoucherRequest request) {
+    public VoucherResponse updateVoucher(UUID voucherId, UpdateVoucherRequest request) {
         Voucher voucher = findByIdOrThrow(voucherId);
 
         if (request.getUsageLimit() != null) {
@@ -100,7 +101,7 @@ public class VoucherService {
     }
 
     @Transactional
-    public void deleteVoucher(Long voucherId) {
+    public void deleteVoucher(UUID voucherId) {
         Voucher voucher = findByIdOrThrow(voucherId);
         voucher.softDelete(SecurityUtils.getCurrentUsernameOrSystem());
         voucherRepository.save(voucher);
@@ -108,7 +109,7 @@ public class VoucherService {
     }
 
     @Transactional(readOnly = true)
-    public VoucherResponse getById(Long voucherId) {
+    public VoucherResponse getById(UUID voucherId) {
         return voucherMapper.toResponse(findByIdOrThrow(voucherId));
     }
 
@@ -125,7 +126,7 @@ public class VoucherService {
     }
 
     @Transactional(readOnly = true)
-    public PagedResponse<VoucherUsageResponse> getUsages(Long voucherId, Pageable pageable) {
+    public PagedResponse<VoucherUsageResponse> getUsages(UUID voucherId, Pageable pageable) {
         if (!voucherRepository.existsById(voucherId)) {
             throw new AppException(ErrorCode.VOUCHER_NOT_FOUND);
         }
@@ -183,9 +184,9 @@ public class VoucherService {
      * @return the discount amount to subtract from the order total
      */
     @Transactional
-    public BigDecimal applyVoucher(String voucherCode, Customer customer, Long orderId,
-                                   BigDecimal orderAmount, List<Long> productIds,
-                                   List<Long> categoryIds, List<Long> brandIds) {
+    public BigDecimal applyVoucher(String voucherCode, Customer customer, UUID orderId,
+                                   BigDecimal orderAmount, List<UUID> productIds,
+                                   List<UUID> categoryIds, List<UUID> brandIds) {
         if (voucherCode == null || voucherCode.isBlank()) {
             return BigDecimal.ZERO;
         }
@@ -226,7 +227,7 @@ public class VoucherService {
      * Decrements counters but does NOT delete the usage record (immutable audit trail).
      */
     @Transactional
-    public void releaseVoucher(String voucherCode, Long orderId) {
+    public void releaseVoucher(String voucherCode, UUID orderId) {
         if (voucherCode == null || voucherCode.isBlank()) {
             return;
         }
@@ -255,7 +256,7 @@ public class VoucherService {
      * Throws a specific {@link AppException} on the first failing check.
      */
     private void doValidate(Voucher voucher, Customer customer, BigDecimal orderAmount,
-                             List<Long> productIds, List<Long> categoryIds, List<Long> brandIds) {
+                             List<UUID> productIds, List<UUID> categoryIds, List<UUID> brandIds) {
         LocalDateTime now = LocalDateTime.now();
 
         // 1. Active flag
@@ -319,7 +320,7 @@ public class VoucherService {
      * Evaluates a single promotion rule. Throws {@link AppException} if the rule is not satisfied.
      */
     private void evaluateRule(PromotionRule rule, Customer customer, BigDecimal orderAmount,
-                               List<Long> productIds, List<Long> categoryIds, List<Long> brandIds) {
+                               List<UUID> productIds, List<UUID> categoryIds, List<UUID> brandIds) {
         String value = rule.getRuleValue().trim();
 
         switch (rule.getRuleType()) {
@@ -331,7 +332,7 @@ public class VoucherService {
                 }
             }
             case SPECIFIC_PRODUCTS -> {
-                List<Long> requiredIds = parseIds(value);
+                List<UUID> requiredIds = parseIds(value);
                 boolean hasMatch = productIds.stream().anyMatch(requiredIds::contains);
                 if (!hasMatch) {
                     throw new AppException(ErrorCode.VOUCHER_NOT_APPLICABLE,
@@ -339,7 +340,7 @@ public class VoucherService {
                 }
             }
             case SPECIFIC_CATEGORIES -> {
-                List<Long> requiredIds = parseIds(value);
+                List<UUID> requiredIds = parseIds(value);
                 boolean hasMatch = categoryIds.stream().anyMatch(requiredIds::contains);
                 if (!hasMatch) {
                     throw new AppException(ErrorCode.VOUCHER_NOT_APPLICABLE,
@@ -347,7 +348,7 @@ public class VoucherService {
                 }
             }
             case SPECIFIC_BRANDS -> {
-                List<Long> requiredIds = parseIds(value);
+                List<UUID> requiredIds = parseIds(value);
                 boolean hasMatch = brandIds.stream().anyMatch(requiredIds::contains);
                 if (!hasMatch) {
                     throw new AppException(ErrorCode.VOUCHER_NOT_APPLICABLE,
@@ -390,7 +391,7 @@ public class VoucherService {
 
     // ─── Internal helpers ─────────────────────────────────────────────────────
 
-    private Voucher findByIdOrThrow(Long id) {
+    private Voucher findByIdOrThrow(UUID id) {
         return voucherRepository.findById(id)
                 .orElseThrow(() -> new AppException(ErrorCode.VOUCHER_NOT_FOUND));
     }
@@ -413,14 +414,14 @@ public class VoucherService {
         return CodeGenerator.generateVoucherCode();
     }
 
-    private List<Long> parseIds(String commaSeparated) {
+    private List<UUID> parseIds(String commaSeparated) {
         try {
             return Arrays.stream(commaSeparated.split(","))
                     .map(String::trim)
                     .filter(s -> !s.isEmpty())
-                    .map(Long::parseLong)
+                    .map(UUID::fromString)
                     .toList();
-        } catch (NumberFormatException e) {
+        } catch (IllegalArgumentException e) {
             // A malformed rule value is a data integrity problem, not a user error.
             // Silently returning empty would bypass product/category/brand restrictions.
             throw new AppException(ErrorCode.INTERNAL_SERVER_ERROR,

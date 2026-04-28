@@ -17,6 +17,7 @@ import org.springframework.data.web.PageableDefault;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.UUID;
 /**
  * Customer-facing and public review endpoints.
  * Admin moderation lives in
@@ -49,7 +50,7 @@ public class ReviewController {
     @Operation(summary = "Get approved reviews for a product")
     @GetMapping("/product/{productId}")
     public ApiResponse<PagedResponse<ReviewResponse>> getProductReviews(
-            @PathVariable Long productId,
+            @PathVariable UUID productId,
             ReviewFilter filter,
             @PageableDefault(size = AppConstants.DEFAULT_PAGE_SIZE) Pageable pageable) {
         return ApiResponse.success(reviewService.getProductReviews(productId, filter, pageable));

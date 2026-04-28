@@ -28,6 +28,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.List;
 
+import java.util.UUID;
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -78,7 +79,7 @@ public class PaymentService {
      * Throws {@code PAYMENT_ALREADY_PROCESSED} for non-PENDING statuses (e.g., REFUNDED).
      */
     @Transactional
-    public PaymentResponse completeCodPayment(Long orderId) {
+    public PaymentResponse completeCodPayment(UUID orderId) {
         Payment payment = findByOrderIdOrThrow(orderId);
 
         // Idempotent: already paid → return silently
@@ -126,7 +127,7 @@ public class PaymentService {
      * </ul>
      */
     @Transactional
-    public PaymentResponse initiateOnlinePayment(Long orderId, Customer customer,
+    public PaymentResponse initiateOnlinePayment(UUID orderId, Customer customer,
                                                  InitPaymentRequest request) {
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new AppException(ErrorCode.ORDER_NOT_FOUND));
@@ -282,7 +283,7 @@ public class PaymentService {
      * Enforces ownership — throws ORDER_NOT_FOUND if the order belongs to another customer.
      */
     @Transactional(readOnly = true)
-    public PaymentResponse getPaymentForCustomer(Long orderId, Customer customer) {
+    public PaymentResponse getPaymentForCustomer(UUID orderId, Customer customer) {
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new AppException(ErrorCode.ORDER_NOT_FOUND));
 
@@ -303,14 +304,14 @@ public class PaymentService {
     }
 
     @Transactional(readOnly = true)
-    public PaymentResponse adminGetById(Long paymentId) {
+    public PaymentResponse adminGetById(UUID paymentId) {
         Payment payment = paymentRepository.findById(paymentId)
                 .orElseThrow(() -> new AppException(ErrorCode.PAYMENT_NOT_FOUND));
         return paymentMapper.toResponse(payment);
     }
 
     @Transactional(readOnly = true)
-    public PaymentResponse adminGetByOrderId(Long orderId) {
+    public PaymentResponse adminGetByOrderId(UUID orderId) {
         return paymentMapper.toResponse(findByOrderIdOrThrow(orderId));
     }
 
@@ -322,7 +323,7 @@ public class PaymentService {
     }
 
     @Transactional(readOnly = true)
-    public List<TransactionResponse> getTransactions(Long paymentId) {
+    public List<TransactionResponse> getTransactions(UUID paymentId) {
         if (!paymentRepository.existsById(paymentId)) {
             throw new AppException(ErrorCode.PAYMENT_NOT_FOUND);
         }
@@ -332,7 +333,7 @@ public class PaymentService {
 
     // ─── Internal helpers ─────────────────────────────────────────────────────
 
-    private Payment findByOrderIdOrThrow(Long orderId) {
+    private Payment findByOrderIdOrThrow(UUID orderId) {
         return paymentRepository.findByOrderId(orderId)
                 .orElseThrow(() -> new AppException(ErrorCode.PAYMENT_NOT_FOUND));
     }

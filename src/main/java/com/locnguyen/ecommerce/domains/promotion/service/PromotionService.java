@@ -20,6 +20,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.UUID;
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -56,7 +57,7 @@ public class PromotionService {
     }
 
     @Transactional
-    public PromotionResponse updatePromotion(Long promotionId, UpdatePromotionRequest request) {
+    public PromotionResponse updatePromotion(UUID promotionId, UpdatePromotionRequest request) {
         Promotion promotion = findByIdOrThrow(promotionId);
 
         if (request.getName() != null) {
@@ -97,7 +98,7 @@ public class PromotionService {
     }
 
     @Transactional
-    public void deletePromotion(Long promotionId) {
+    public void deletePromotion(UUID promotionId) {
         Promotion promotion = findByIdOrThrow(promotionId);
         promotion.softDelete(SecurityUtils.getCurrentUsernameOrSystem());
         promotionRepository.save(promotion);
@@ -105,7 +106,7 @@ public class PromotionService {
     }
 
     @Transactional(readOnly = true)
-    public PromotionResponse getById(Long promotionId) {
+    public PromotionResponse getById(UUID promotionId) {
         return promotionMapper.toResponse(findByIdOrThrow(promotionId));
     }
 
@@ -119,7 +120,7 @@ public class PromotionService {
     // ─── Rule management ─────────────────────────────────────────────────────
 
     @Transactional
-    public PromotionResponse addRule(Long promotionId, AddRuleRequest request) {
+    public PromotionResponse addRule(UUID promotionId, AddRuleRequest request) {
         Promotion promotion = findByIdOrThrow(promotionId);
 
         PromotionRule rule = new PromotionRule();
@@ -136,7 +137,7 @@ public class PromotionService {
     }
 
     @Transactional
-    public PromotionResponse removeRule(Long promotionId, Long ruleId) {
+    public PromotionResponse removeRule(UUID promotionId, UUID ruleId) {
         findByIdOrThrow(promotionId);
 
         PromotionRule rule = promotionRuleRepository.findById(ruleId)
@@ -154,7 +155,7 @@ public class PromotionService {
     // ─── Internal helpers ─────────────────────────────────────────────────────
 
     // Intentionally package-private — only VoucherService (same package) and internal methods need this.
-    Promotion findByIdOrThrow(Long promotionId) {
+    Promotion findByIdOrThrow(UUID promotionId) {
         return promotionRepository.findById(promotionId)
                 .orElseThrow(() -> new AppException(ErrorCode.PROMOTION_NOT_FOUND));
     }
@@ -164,7 +165,7 @@ public class PromotionService {
      * Called by {@code VoucherService} after a successful voucher redemption.
      */
     @Transactional
-    public void incrementUsageCount(Long promotionId) {
+    public void incrementUsageCount(UUID promotionId) {
         if (!promotionRepository.existsById(promotionId)) {
             throw new AppException(ErrorCode.PROMOTION_NOT_FOUND);
         }
@@ -176,7 +177,7 @@ public class PromotionService {
      * Floored at zero by the repository query.
      */
     @Transactional
-    public void decrementUsageCount(Long promotionId) {
+    public void decrementUsageCount(UUID promotionId) {
         if (!promotionRepository.existsById(promotionId)) {
             throw new AppException(ErrorCode.PROMOTION_NOT_FOUND);
         }

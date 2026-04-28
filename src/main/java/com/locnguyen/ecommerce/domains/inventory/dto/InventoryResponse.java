@@ -7,17 +7,18 @@ import lombok.Getter;
 
 import java.time.LocalDateTime;
 
+import java.util.UUID;
 @Getter
 @Builder
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @Schema(description = "Inventory response — stock levels for a variant in a warehouse")
 public class InventoryResponse {
 
-    private final Long id;
-    private final Long variantId;
+    private final UUID id;
+    private final UUID variantId;
     private final String variantName;
     private final String sku;
-    private final Long warehouseId;
+    private final UUID warehouseId;
     private final String warehouseName;
     private final int onHand;
     private final int reserved;

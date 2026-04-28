@@ -7,20 +7,21 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
-public interface VoucherUsageRepository extends JpaRepository<VoucherUsage, Long> {
+import java.util.UUID;
+public interface VoucherUsageRepository extends JpaRepository<VoucherUsage, UUID> {
 
-    Page<VoucherUsage> findByVoucherId(Long voucherId, Pageable pageable);
+    Page<VoucherUsage> findByVoucherId(UUID voucherId, Pageable pageable);
 
-    long countByVoucherId(Long voucherId);
+    long countByVoucherId(UUID voucherId);
 
-    long countByVoucherIdAndCustomerId(Long voucherId, Long customerId);
+    long countByVoucherIdAndCustomerId(UUID voucherId, UUID customerId);
 
-    boolean existsByVoucherIdAndOrderId(Long voucherId, Long orderId);
+    boolean existsByVoucherIdAndOrderId(UUID voucherId, UUID orderId);
 
     @Query("SELECT COUNT(vu) > 0 FROM VoucherUsage vu " +
            "WHERE vu.customer.id = :customerId " +
            "AND vu.voucher.promotion.id = :promotionId")
     boolean existsByCustomerIdAndPromotionId(
-            @Param("customerId") Long customerId,
-            @Param("promotionId") Long promotionId);
+            @Param("customerId") UUID customerId,
+            @Param("promotionId") UUID promotionId);
 }

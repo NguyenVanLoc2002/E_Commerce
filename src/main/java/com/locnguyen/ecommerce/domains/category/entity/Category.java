@@ -2,6 +2,7 @@ package com.locnguyen.ecommerce.domains.category.entity;
 
 import com.locnguyen.ecommerce.common.auditing.SoftDeleteEntity;
 import com.locnguyen.ecommerce.domains.category.enums.CategoryStatus;
+import com.locnguyen.ecommerce.domains.product.entity.Product;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -53,5 +54,5 @@ public class Category extends SoftDeleteEntity {
 
     @ManyToMany(mappedBy = "categories")
     @ToString.Exclude
-    private Set<com.locnguyen.ecommerce.domains.product.entity.Product> products = new HashSet<>();
+    private Set<Product> products = new HashSet<>();
 }

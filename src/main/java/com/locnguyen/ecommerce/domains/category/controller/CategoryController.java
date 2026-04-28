@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
+import java.util.UUID;
 /**
  * Public category catalog endpoints (no authentication required).
  * Admin CRUD lives in {@link com.locnguyen.ecommerce.domains.admin.controller.AdminCategoryController}.
@@ -31,7 +32,7 @@ public class CategoryController {
 
     @Operation(summary = "Get category by ID")
     @GetMapping("/{id}")
-    public ApiResponse<CategoryResponse> getCategory(@PathVariable Long id) {
+    public ApiResponse<CategoryResponse> getCategory(@PathVariable UUID id) {
         return ApiResponse.success(categoryService.getCategoryById(id));
     }
 }

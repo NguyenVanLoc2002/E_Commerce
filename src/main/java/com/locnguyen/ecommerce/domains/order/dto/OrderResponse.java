@@ -12,15 +12,16 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 
+import java.util.UUID;
 @Getter
 @Builder
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @Schema(description = "Order response — full order with items")
 public class OrderResponse {
 
-    private final Long id;
+    private final UUID id;
     private final String orderCode;
-    private final Long customerId;
+    private final UUID customerId;
     private final OrderStatus status;
     private final PaymentMethod paymentMethod;
     private final PaymentStatus paymentStatus;

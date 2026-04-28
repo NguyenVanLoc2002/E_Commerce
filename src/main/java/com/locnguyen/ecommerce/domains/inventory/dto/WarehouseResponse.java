@@ -8,13 +8,14 @@ import lombok.Getter;
 
 import java.time.LocalDateTime;
 
+import java.util.UUID;
 @Getter
 @Builder
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @Schema(description = "Warehouse response")
 public class WarehouseResponse {
 
-    private final Long id;
+    private final UUID id;
     private final String name;
     private final String code;
     private final String location;

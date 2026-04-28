@@ -9,7 +9,8 @@ import org.springframework.data.repository.query.Param;
 
 import java.util.Optional;
 
-public interface VoucherRepository extends JpaRepository<Voucher, Long>,
+import java.util.UUID;
+public interface VoucherRepository extends JpaRepository<Voucher, UUID>,
         JpaSpecificationExecutor<Voucher> {
 
     Optional<Voucher> findByCodeIgnoreCase(String code);
@@ -35,7 +36,7 @@ public interface VoucherRepository extends JpaRepository<Voucher, Long>,
      */
     @Modifying
     @Query("UPDATE Voucher v SET v.usageCount = v.usageCount + 1 WHERE v.id = :id")
-    void incrementUsageCount(@Param("id") Long id);
+    void incrementUsageCount(@Param("id") UUID id);
 
     /**
      * Atomically decrements the usage counter, floored at zero.
@@ -46,5 +47,5 @@ public interface VoucherRepository extends JpaRepository<Voucher, Long>,
             SET v.usageCount = CASE WHEN v.usageCount > 0 THEN v.usageCount - 1 ELSE 0 END
             WHERE v.id = :id
             """)
-    void decrementUsageCount(@Param("id") Long id);
+    void decrementUsageCount(@Param("id") UUID id);
 }

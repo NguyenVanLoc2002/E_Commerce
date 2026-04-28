@@ -9,8 +9,8 @@
 -- for fast querying; this table holds the full payment record.
 
 CREATE TABLE payments (
-    id              BIGINT PRIMARY KEY AUTO_INCREMENT,
-    order_id        BIGINT         NOT NULL,
+    id              CHAR(36) PRIMARY KEY,
+    order_id        CHAR(36)         NOT NULL,
     payment_code    VARCHAR(50)    NOT NULL,
     method          VARCHAR(50)    NOT NULL,
     status          VARCHAR(50)    NOT NULL DEFAULT 'PENDING',
@@ -35,8 +35,8 @@ CREATE INDEX idx_payments_created_at ON payments(created_at);
 -- Immutable — never updated or deleted.
 
 CREATE TABLE payment_transactions (
-    id              BIGINT PRIMARY KEY AUTO_INCREMENT,
-    payment_id      BIGINT         NOT NULL,
+    id              CHAR(36) PRIMARY KEY,
+    payment_id      CHAR(36)         NOT NULL,
     transaction_code VARCHAR(50)   NOT NULL,
     status          VARCHAR(50)    NOT NULL,
     amount          DECIMAL(18,2)  NOT NULL,
@@ -48,7 +48,9 @@ CREATE TABLE payment_transactions (
     payload         TEXT           NULL,
     note            VARCHAR(500)   NULL,
     created_at      DATETIME       NOT NULL,
+    updated_at   DATETIME       NOT NULL,
     created_by      VARCHAR(100)   NULL,
+    updated_by   VARCHAR(100) NULL,
 
     CONSTRAINT fk_pt_payment FOREIGN KEY (payment_id) REFERENCES payments(id),
     CONSTRAINT uq_pt_code    UNIQUE (transaction_code)

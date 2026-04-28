@@ -7,6 +7,7 @@ import lombok.Data;
 
 import java.util.List;
 
+import java.util.UUID;
 @Data
 @Schema(description = "Update product request — only provided fields are updated")
 public class UpdateProductRequest {
@@ -22,10 +23,10 @@ public class UpdateProductRequest {
 
     private String description;
 
-    private Long brandId;
+    private UUID brandId;
 
     @Schema(description = "Replace category assignments with this list")
-    private List<Long> categoryIds;
+    private List<UUID> categoryIds;
 
     private ProductStatus status;
 

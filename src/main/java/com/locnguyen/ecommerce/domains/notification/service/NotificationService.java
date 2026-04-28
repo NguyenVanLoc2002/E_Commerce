@@ -22,6 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 
+import java.util.UUID;
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -52,7 +53,7 @@ public class NotificationService {
     @Async
     @Transactional
     public void send(Customer customer, NotificationType type, String title, String body,
-                     Long referenceId, String referenceType) {
+                     UUID referenceId, String referenceType) {
         try {
             Notification notification = new Notification();
             notification.setCustomer(customer);
@@ -80,7 +81,7 @@ public class NotificationService {
     }
 
     @Transactional
-    public NotificationResponse markAsRead(Long notificationId, Customer customer) {
+    public NotificationResponse markAsRead(UUID notificationId, Customer customer) {
         Notification notification = notificationRepository.findById(notificationId)
                 .orElseThrow(() -> new AppException(ErrorCode.NOTIFICATION_NOT_FOUND));
 
@@ -130,11 +131,11 @@ public class NotificationService {
         return targets.size();
     }
 
-    private Long parseReferenceId(String raw) {
+    private UUID parseReferenceId(String raw) {
         if (raw == null || raw.isBlank()) return null;
         try {
-            return Long.parseLong(raw.trim());
-        } catch (NumberFormatException ex) {
+            return UUID.fromString(raw.trim());
+        } catch (IllegalArgumentException ex) {
             return null;
         }
     }

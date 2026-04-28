@@ -8,6 +8,7 @@ import lombok.*;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
+import java.util.UUID;
 /**
  * Enriched order list item for the admin dashboard.
  * Includes customer identity fields that are not exposed on the customer-facing list.
@@ -19,10 +20,10 @@ import java.time.LocalDateTime;
 @Builder
 public class AdminOrderListItemResponse {
 
-    private Long id;
+    private UUID id;
     private String orderCode;
 
-    private Long customerId;
+    private UUID customerId;
     private String customerName;
     private String customerEmail;
 

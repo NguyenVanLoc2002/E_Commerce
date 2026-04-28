@@ -7,6 +7,7 @@ import lombok.Setter;
 
 import java.time.LocalDateTime;
 
+import java.util.UUID;
 @Getter
 @Setter
 @Schema(description = "Request to create a voucher. Leave 'code' blank to auto-generate one.")
@@ -17,7 +18,7 @@ public class CreateVoucherRequest {
     private String code;
 
     @NotNull
-    private Long promotionId;
+    private UUID promotionId;
 
     @Min(1)
     @Schema(description = "Total redemption limit. Null means unlimited.")

@@ -13,20 +13,21 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 
+import java.util.UUID;
 @Getter
 @Builder
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @Schema(description = "Invoice with all data needed for rendering or printing")
 public class InvoiceResponse {
 
-    private final Long id;
+    private final UUID id;
     private final String invoiceCode;
     private final InvoiceStatus status;
     private final LocalDateTime issuedAt;
     private final LocalDate dueDate;
     private final String notes;
 
-    private final Long orderId;
+    private final UUID orderId;
     private final String orderCode;
     private final PaymentMethod paymentMethod;
     private final PaymentStatus paymentStatus;

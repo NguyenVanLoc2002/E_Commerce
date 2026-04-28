@@ -6,12 +6,13 @@ import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 
 import java.util.Optional;
 
-public interface ShipmentRepository extends JpaRepository<Shipment, Long>,
+import java.util.UUID;
+public interface ShipmentRepository extends JpaRepository<Shipment, UUID>,
         JpaSpecificationExecutor<Shipment> {
 
-    Optional<Shipment> findByOrderId(Long orderId);
+    Optional<Shipment> findByOrderId(UUID orderId);
 
     Optional<Shipment> findByShipmentCode(String shipmentCode);
 
-    boolean existsByOrderId(Long orderId);
+    boolean existsByOrderId(UUID orderId);
 }

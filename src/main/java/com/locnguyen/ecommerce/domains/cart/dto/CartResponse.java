@@ -9,13 +9,14 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 
+import java.util.UUID;
 @Getter
 @Builder
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @Schema(description = "Cart response — full cart with items and totals")
 public class CartResponse {
 
-    private final Long id;
+    private final UUID id;
     private final List<CartItemResponse> items;
     private final int totalItems;
     private final BigDecimal subTotal;

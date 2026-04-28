@@ -9,7 +9,7 @@
 -- Supports soft delete so historical records stay queryable.
 
 CREATE TABLE promotions (
-    id                   BIGINT PRIMARY KEY AUTO_INCREMENT,
+    id                   CHAR(36) PRIMARY KEY,
     name                 VARCHAR(200)   NOT NULL,
     description          TEXT           NULL,
     discount_type        VARCHAR(50)    NOT NULL,               -- PERCENTAGE | FIXED_AMOUNT
@@ -45,8 +45,8 @@ CREATE INDEX idx_promotions_scope       ON promotions(scope);
 --   ruleType=FIRST_ORDER       ruleValue="true"
 
 CREATE TABLE promotion_rules (
-    id           BIGINT PRIMARY KEY AUTO_INCREMENT,
-    promotion_id BIGINT         NOT NULL,
+    id           CHAR(36) PRIMARY KEY,
+    promotion_id CHAR(36)         NOT NULL,
     rule_type    VARCHAR(100)   NOT NULL,
     rule_value   VARCHAR(500)   NOT NULL,
     description  VARCHAR(255)   NULL,
@@ -66,9 +66,9 @@ CREATE INDEX idx_promo_rules_promotion ON promotion_rules(promotion_id);
 -- Supports soft delete.
 
 CREATE TABLE vouchers (
-    id                   BIGINT PRIMARY KEY AUTO_INCREMENT,
+    id                   CHAR(36) PRIMARY KEY,
     code                 VARCHAR(100)   NOT NULL,
-    promotion_id         BIGINT         NOT NULL,
+    promotion_id         CHAR(36)         NOT NULL,
     usage_limit          INT            NULL,                   -- null = unlimited
     usage_count          INT            NOT NULL DEFAULT 0,
     usage_limit_per_user INT            NULL,                   -- null = unlimited
@@ -98,10 +98,10 @@ CREATE INDEX idx_vouchers_promo    ON vouchers(promotion_id);
 -- with the orders table.
 
 CREATE TABLE voucher_usages (
-    id              BIGINT PRIMARY KEY AUTO_INCREMENT,
-    voucher_id      BIGINT         NOT NULL,
-    customer_id     BIGINT         NOT NULL,
-    order_id        BIGINT         NOT NULL,
+    id              CHAR(36) PRIMARY KEY,
+    voucher_id      CHAR(36)         NOT NULL,
+    customer_id     CHAR(36)         NOT NULL,
+    order_id        CHAR(36)         NOT NULL,
     discount_amount DECIMAL(18,2)  NOT NULL,
     created_at      DATETIME       NOT NULL,
     created_by      VARCHAR(100)   NULL,

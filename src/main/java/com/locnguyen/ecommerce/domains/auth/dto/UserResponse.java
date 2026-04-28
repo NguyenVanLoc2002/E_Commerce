@@ -9,6 +9,7 @@ import lombok.Getter;
 import java.time.LocalDateTime;
 import java.util.Set;
 
+import java.util.UUID;
 @Getter
 @Builder
 @JsonInclude(JsonInclude.Include.NON_NULL)
@@ -16,7 +17,7 @@ import java.util.Set;
 public class UserResponse {
 
     @Schema(description = "User ID")
-    private final Long id;
+    private final UUID id;
 
     @Schema(description = "User email (used as login)")
     private final String email;

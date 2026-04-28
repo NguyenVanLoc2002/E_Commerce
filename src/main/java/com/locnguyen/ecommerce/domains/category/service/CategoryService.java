@@ -3,9 +3,11 @@ package com.locnguyen.ecommerce.domains.category.service;
 import com.locnguyen.ecommerce.common.constants.AppConstants;
 import com.locnguyen.ecommerce.common.exception.AppException;
 import com.locnguyen.ecommerce.common.exception.ErrorCode;
+import com.locnguyen.ecommerce.common.response.PagedResponse;
 import com.locnguyen.ecommerce.common.utils.SecurityUtils;
 import com.locnguyen.ecommerce.domains.auditlog.enums.AuditAction;
 import com.locnguyen.ecommerce.domains.auditlog.service.AuditLogService;
+import com.locnguyen.ecommerce.domains.category.dto.CategoryFilter;
 import com.locnguyen.ecommerce.domains.category.dto.CategoryResponse;
 import com.locnguyen.ecommerce.domains.category.dto.CreateCategoryRequest;
 import com.locnguyen.ecommerce.domains.category.dto.UpdateCategoryRequest;
@@ -13,15 +15,21 @@ import com.locnguyen.ecommerce.domains.category.entity.Category;
 import com.locnguyen.ecommerce.domains.category.enums.CategoryStatus;
 import com.locnguyen.ecommerce.domains.category.mapper.CategoryMapper;
 import com.locnguyen.ecommerce.domains.category.repository.CategoryRepository;
+import com.locnguyen.ecommerce.domains.category.specification.CategorySpecification;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
-import org.springframework.cache.annotation.Caching;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
 import java.util.List;
+
+import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -35,6 +43,20 @@ public class CategoryService {
     // ─── Public ───────────────────────────────────────────────────────────────
 
     /**
+     * Get paginated categories with optional filters.
+     * Not cached since it's only used in admin panel and can have many combinations.
+     */
+    public PagedResponse<CategoryResponse> getAllCategories(
+            CategoryFilter filter,
+            Pageable pageable
+    ) {
+        Page<Category> pageCategories = categoryRepository.findAll(
+                CategorySpecification.withFilter(filter), pageable
+        );
+        return PagedResponse.of(pageCategories.map(categoryMapper::toResponse));
+    }
+
+    /**
      * List all active categories ordered by sort order.
      * Cached for 30 minutes — evicted whenever any category is mutated.
      */
@@ -42,7 +64,9 @@ public class CategoryService {
     @Transactional(readOnly = true)
     public List<CategoryResponse> getActiveCategories() {
         return categoryRepository.findByStatusOrderBySortOrderAsc(CategoryStatus.ACTIVE)
-                .stream().map(categoryMapper::toResponse).toList();
+                .stream()
+                .map(categoryMapper::toResponse)
+                .collect(Collectors.toCollection(ArrayList::new));
     }
 
     /**
@@ -51,7 +75,7 @@ public class CategoryService {
      */
     @Cacheable(value = AppConstants.CACHE_CATEGORIES, key = "'id:' + #id")
     @Transactional(readOnly = true)
-    public CategoryResponse getCategoryById(Long id) {
+    public CategoryResponse getCategoryById(UUID id) {
         return categoryMapper.toResponse(findOrThrow(id));
     }
 
@@ -87,7 +111,7 @@ public class CategoryService {
 
     @CacheEvict(value = AppConstants.CACHE_CATEGORIES, allEntries = true)
     @Transactional
-    public CategoryResponse updateCategory(Long id, UpdateCategoryRequest request) {
+    public CategoryResponse updateCategory(UUID id, UpdateCategoryRequest request) {
         Category category = findOrThrow(id);
 
         if (request.getName() != null) {
@@ -129,7 +153,7 @@ public class CategoryService {
 
     @CacheEvict(value = AppConstants.CACHE_CATEGORIES, allEntries = true)
     @Transactional
-    public void deleteCategory(Long id) {
+    public void deleteCategory(UUID id) {
         Category category = findOrThrow(id);
         String actor = SecurityUtils.getCurrentUsernameOrSystem();
         category.softDelete(actor);
@@ -140,7 +164,7 @@ public class CategoryService {
 
     // ─── Internal ────────────────────────────────────────────────────────────
 
-    private Category findOrThrow(Long id) {
+    private Category findOrThrow(UUID id) {
         return categoryRepository.findById(id)
                 .orElseThrow(() -> new AppException(ErrorCode.CATEGORY_NOT_FOUND));
     }

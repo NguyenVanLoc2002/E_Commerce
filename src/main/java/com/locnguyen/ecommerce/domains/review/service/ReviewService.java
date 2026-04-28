@@ -32,6 +32,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 
+import java.util.UUID;
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -110,13 +111,13 @@ public class ReviewService {
     // ─── Read operations ─────────────────────────────────────────────────────
 
     @Transactional(readOnly = true)
-    public ReviewResponse getReviewById(Long id) {
+    public ReviewResponse getReviewById(UUID id) {
         return reviewMapper.toResponse(findOrThrow(id));
     }
 
     /** Returns APPROVED reviews for a product — public endpoint. Supports rating filter. */
     @Transactional(readOnly = true)
-    public PagedResponse<ReviewResponse> getProductReviews(Long productId, ReviewFilter filter, Pageable pageable) {
+    public PagedResponse<ReviewResponse> getProductReviews(UUID productId, ReviewFilter filter, Pageable pageable) {
         filter.setProductId(productId);
         filter.setStatus(ReviewStatus.APPROVED);
         Page<Review> page = reviewRepository.findAll(ReviewSpecification.withFilter(filter), pageable);
@@ -150,7 +151,7 @@ public class ReviewService {
 
     /** Admin lookup by ID — alias for {@link #getReviewById(Long)}. */
     @Transactional(readOnly = true)
-    public ReviewResponse adminGetById(Long id) {
+    public ReviewResponse adminGetById(UUID id) {
         return getReviewById(id);
     }
 
@@ -159,7 +160,7 @@ public class ReviewService {
      * Delegates to the canonical moderation flow.
      */
     @Transactional
-    public ReviewResponse moderateReview(Long reviewId, UpdateReviewStatusRequest request) {
+    public ReviewResponse moderateReview(UUID reviewId, UpdateReviewStatusRequest request) {
         ModerateReviewRequest delegate = new ModerateReviewRequest();
         delegate.setAction(request.getStatus());
         delegate.setAdminNote(request.getAdminNote());
@@ -175,7 +176,7 @@ public class ReviewService {
      * not in {@link ReviewStatus#PENDING} state.
      */
     @Transactional
-    public ReviewResponse moderateReview(Long reviewId, ModerateReviewRequest request) {
+    public ReviewResponse moderateReview(UUID reviewId, ModerateReviewRequest request) {
         Review review = findOrThrow(reviewId);
         String actor = SecurityUtils.getCurrentUsernameOrSystem();
 
@@ -231,7 +232,7 @@ public class ReviewService {
      * Soft-delete a review — admin only.
      */
     @Transactional
-    public void deleteReview(Long reviewId) {
+    public void deleteReview(UUID reviewId) {
         Review review = findOrThrow(reviewId);
         String actor = SecurityUtils.getCurrentUsernameOrSystem();
         review.softDelete(actor);
@@ -241,7 +242,7 @@ public class ReviewService {
 
     // ─── Helpers ─────────────────────────────────────────────────────────────
 
-    private Review findOrThrow(Long id) {
+    private Review findOrThrow(UUID id) {
         return reviewRepository.findById(id)
                 .orElseThrow(() -> new AppException(ErrorCode.REVIEW_NOT_FOUND));
     }

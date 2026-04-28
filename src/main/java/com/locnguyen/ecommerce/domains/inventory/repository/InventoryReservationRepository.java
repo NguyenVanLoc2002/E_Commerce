@@ -11,15 +11,16 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
-public interface InventoryReservationRepository extends JpaRepository<InventoryReservation, Long> {
+import java.util.UUID;
+public interface InventoryReservationRepository extends JpaRepository<InventoryReservation, UUID> {
 
-    List<InventoryReservation> findByVariantIdAndStatus(Long variantId, ReservationStatus status);
+    List<InventoryReservation> findByVariantIdAndStatus(UUID variantId, ReservationStatus status);
 
     List<InventoryReservation> findByReferenceTypeAndReferenceIdAndStatus(
             String referenceType, String referenceId, ReservationStatus status);
 
     Optional<InventoryReservation> findByReferenceTypeAndReferenceIdAndVariantIdAndStatus(
-            String referenceType, String referenceId, Long variantId, ReservationStatus status);
+            String referenceType, String referenceId, UUID variantId, ReservationStatus status);
 
     /**
      * Find all PENDING reservations that have passed their expiration time.

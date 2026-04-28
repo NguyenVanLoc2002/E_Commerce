@@ -24,6 +24,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 
+import java.util.UUID;
 /**
  * Async audit-log writer.
  *
@@ -128,7 +129,7 @@ public class AuditLogService {
      * Get a single audit log entry by id.
      */
     @Transactional(readOnly = true)
-    public AuditLogResponse getAuditLogById(Long id) {
+    public AuditLogResponse getAuditLogById(UUID id) {
         return auditLogRepository.findById(id)
                 .map(AuditLogResponse::from)
                 .orElseThrow(() -> new AppException(ErrorCode.NOT_FOUND,

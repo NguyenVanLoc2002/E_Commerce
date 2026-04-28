@@ -8,17 +8,18 @@ import lombok.Getter;
 
 import java.time.LocalDateTime;
 
+import java.util.UUID;
 @Getter
 @Builder
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @Schema(description = "Stock movement response — audit trail entry")
 public class StockMovementResponse {
 
-    private final Long id;
-    private final Long variantId;
+    private final UUID id;
+    private final UUID variantId;
     private final String variantName;
     private final String sku;
-    private final Long warehouseId;
+    private final UUID warehouseId;
     private final String warehouseName;
     private final StockMovementType movementType;
     private final int quantity;

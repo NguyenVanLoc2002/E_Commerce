@@ -47,6 +47,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+import java.util.UUID;
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -170,14 +171,14 @@ public class OrderService {
         order = orderRepository.save(order);
 
         // 7. Reserve inventory for each item — batch-load to avoid N+1 per cart item
-        List<Long> variantIds = cartItems.stream()
+        List<UUID> variantIds = cartItems.stream()
                 .map(ci -> ci.getVariant().getId())
                 .toList();
 
         List<Inventory> allInventories = inventoryRepository.findByVariantIdIn(variantIds);
 
         // Group inventories by variant ID for O(1) lookup per item
-        Map<Long, List<Inventory>> inventoriesByVariant = allInventories.stream()
+        Map<UUID, List<Inventory>> inventoriesByVariant = allInventories.stream()
                 .collect(Collectors.groupingBy(inv -> inv.getVariant().getId()));
 
         for (CartItem ci : cartItems) {
@@ -238,7 +239,7 @@ public class OrderService {
     }
 
     @Transactional(readOnly = true)
-    public OrderResponse getOrderById(Long orderId, Customer customer) {
+    public OrderResponse getOrderById(UUID orderId, Customer customer) {
         Order order = findOrThrow(orderId);
         if (!order.getCustomer().getId().equals(customer.getId())) {
             throw new AppException(ErrorCode.ORDER_NOT_FOUND);
@@ -268,7 +269,7 @@ public class OrderService {
 
     /** Get any order by ID without ownership check — admin use only. */
     @Transactional(readOnly = true)
-    public OrderResponse getOrderByIdAdmin(Long orderId) {
+    public OrderResponse getOrderByIdAdmin(UUID orderId) {
         return buildOrderResponse(findOrThrow(orderId));
     }
 
@@ -284,7 +285,7 @@ public class OrderService {
      * </ul>
      */
     @Transactional
-    public OrderResponse confirmOrder(Long orderId) {
+    public OrderResponse confirmOrder(UUID orderId) {
         Order order = findOrThrow(orderId);
         String actor = SecurityUtils.getCurrentUsernameOrSystem();
 
@@ -329,7 +330,7 @@ public class OrderService {
      * CONFIRMED orders can still be cancelled (before shipment).
      */
     @Transactional
-    public OrderResponse cancelOrder(Long orderId) {
+    public OrderResponse cancelOrder(UUID orderId) {
         Order order = findOrThrow(orderId);
         return doCancelOrder(order);
     }
@@ -341,7 +342,7 @@ public class OrderService {
      * CONFIRMED orders require admin intervention.
      */
     @Transactional
-    public OrderResponse cancelMyOrder(Long orderId, Customer customer) {
+    public OrderResponse cancelMyOrder(UUID orderId, Customer customer) {
         Order order = findOrThrow(orderId);
 
         if (!order.getCustomer().getId().equals(customer.getId())) {
@@ -395,7 +396,7 @@ public class OrderService {
      * This represents the physical goods leaving the warehouse.
      */
     @Transactional
-    public OrderResponse completeOrder(Long orderId) {
+    public OrderResponse completeOrder(UUID orderId) {
         Order order = findOrThrow(orderId);
         String actor = SecurityUtils.getCurrentUsernameOrSystem();
 
@@ -432,7 +433,7 @@ public class OrderService {
      * Represents staff starting to pick/pack the order.
      */
     @Transactional
-    public OrderResponse processOrder(Long orderId) {
+    public OrderResponse processOrder(UUID orderId) {
         Order order = findOrThrow(orderId);
         String actor = SecurityUtils.getCurrentUsernameOrSystem();
         applyTransition(order, OrderStatus.PROCESSING, ErrorCode.ORDER_STATUS_INVALID);
@@ -448,7 +449,7 @@ public class OrderService {
      * Represents confirmed delivery to the customer.
      */
     @Transactional
-    public OrderResponse deliverOrder(Long orderId) {
+    public OrderResponse deliverOrder(UUID orderId) {
         Order order = findOrThrow(orderId);
         String actor = SecurityUtils.getCurrentUsernameOrSystem();
         applyTransition(order, OrderStatus.DELIVERED, ErrorCode.ORDER_STATUS_INVALID);
@@ -471,7 +472,7 @@ public class OrderService {
 
     // ─── Internal helpers ────────────────────────────────────────────────────
 
-    private Order findOrThrow(Long id) {
+    private Order findOrThrow(UUID id) {
         return orderRepository.findById(id)
                 .orElseThrow(() -> new AppException(ErrorCode.ORDER_NOT_FOUND));
     }

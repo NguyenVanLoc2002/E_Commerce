@@ -11,6 +11,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.UUID;
 @Tag(name = "Invoices", description = "Invoice access for customers")
 @RestController
 @RequiredArgsConstructor
@@ -26,7 +27,7 @@ public class InvoiceController {
     )
     @SecurityRequirement(name = "bearerAuth")
     @GetMapping("/order/{orderId}")
-    public ApiResponse<InvoiceResponse> getMyInvoice(@PathVariable Long orderId) {
+    public ApiResponse<InvoiceResponse> getMyInvoice(@PathVariable UUID orderId) {
         return ApiResponse.success(
                 invoiceService.getInvoiceForCustomer(orderId, userService.getCurrentCustomer()));
     }

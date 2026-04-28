@@ -12,12 +12,14 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
+import java.util.UUID;
 /**
  * Admin product management API.
  *
@@ -44,13 +46,17 @@ public class AdminProductController {
     @GetMapping
     public ApiResponse<PagedResponse<ProductListItemResponse>> getAllProducts(
             ProductFilter filter,
-            @PageableDefault(size = AppConstants.DEFAULT_PAGE_SIZE, sort = "createdAt,desc") Pageable pageable) {
+            @PageableDefault(
+                    size = AppConstants.DEFAULT_PAGE_SIZE,
+                    sort = "createdAt",
+                    direction = Sort.Direction.DESC
+            ) Pageable pageable) {
         return ApiResponse.success(productService.getAllProducts(filter, pageable));
     }
 
     @Operation(summary = "Get any product detail by ID (no status filter)")
     @GetMapping("/{id}")
-    public ApiResponse<ProductDetailResponse> getProduct(@PathVariable Long id) {
+    public ApiResponse<ProductDetailResponse> getProduct(@PathVariable UUID id) {
         return ApiResponse.success(productService.getProductDetailAdmin(id));
     }
 
@@ -64,14 +70,14 @@ public class AdminProductController {
     @Operation(summary = "Update product")
     @PatchMapping("/{id}")
     public ApiResponse<ProductDetailResponse> updateProduct(
-            @PathVariable Long id,
+            @PathVariable UUID id,
             @Valid @RequestBody UpdateProductRequest request) {
         return ApiResponse.success(productService.updateProduct(id, request));
     }
 
     @Operation(summary = "Soft-delete product")
     @DeleteMapping("/{id}")
-    public ApiResponse<Void> deleteProduct(@PathVariable Long id) {
+    public ApiResponse<Void> deleteProduct(@PathVariable UUID id) {
         productService.deleteProduct(id);
         return ApiResponse.noContent();
     }
@@ -80,14 +86,14 @@ public class AdminProductController {
 
     @Operation(summary = "List variants for a product")
     @GetMapping("/{productId}/variants")
-    public ApiResponse<List<VariantResponse>> getVariants(@PathVariable Long productId) {
+    public ApiResponse<List<VariantResponse>> getVariants(@PathVariable UUID productId) {
         return ApiResponse.success(variantService.getVariantsByProduct(productId));
     }
 
     @Operation(summary = "Create variant for a product")
     @PostMapping("/{productId}/variants")
     public ApiResponse<VariantResponse> createVariant(
-            @PathVariable Long productId,
+            @PathVariable UUID productId,
             @Valid @RequestBody CreateVariantRequest request) {
         return ApiResponse.created(variantService.createVariant(productId, request));
     }
@@ -95,8 +101,8 @@ public class AdminProductController {
     @Operation(summary = "Update variant")
     @PatchMapping("/{productId}/variants/{variantId}")
     public ApiResponse<VariantResponse> updateVariant(
-            @PathVariable Long productId,
-            @PathVariable Long variantId,
+            @PathVariable UUID productId,
+            @PathVariable UUID variantId,
             @Valid @RequestBody UpdateVariantRequest request) {
         return ApiResponse.success(variantService.updateVariant(productId, variantId, request));
     }
@@ -104,8 +110,8 @@ public class AdminProductController {
     @Operation(summary = "Soft-delete variant")
     @DeleteMapping("/{productId}/variants/{variantId}")
     public ApiResponse<Void> deleteVariant(
-            @PathVariable Long productId,
-            @PathVariable Long variantId) {
+            @PathVariable UUID productId,
+            @PathVariable UUID variantId) {
         variantService.deleteVariant(productId, variantId);
         return ApiResponse.noContent();
     }

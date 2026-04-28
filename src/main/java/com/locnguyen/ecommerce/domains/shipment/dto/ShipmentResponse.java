@@ -11,14 +11,15 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 
+import java.util.UUID;
 @Getter
 @Builder
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @Schema(description = "Shipment details and tracking timeline")
 public class ShipmentResponse {
 
-    private final Long id;
-    private final Long orderId;
+    private final UUID id;
+    private final UUID orderId;
     private final String orderCode;
     private final String shipmentCode;
     private final String carrier;

@@ -10,12 +10,13 @@ import org.springframework.stereotype.Repository;
 
 import java.util.List;
 
+import java.util.UUID;
 @Repository
-public interface AddressRepository extends JpaRepository<Address, Long> {
+public interface AddressRepository extends JpaRepository<Address, UUID> {
 
-    List<Address> findByCustomerId(Long customerId, Sort sort);
+    List<Address> findByCustomerId(UUID customerId, Sort sort);
 
     @Modifying
     @Query("UPDATE Address a SET a.defaultAddress = false WHERE a.customer.id = :customerId AND a.defaultAddress = true")
-    void clearDefaultByCustomerId(@Param("customerId") Long customerId);
+    void clearDefaultByCustomerId(@Param("customerId") UUID customerId);
 }

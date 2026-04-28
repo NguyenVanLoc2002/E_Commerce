@@ -26,6 +26,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
+import java.util.UUID;
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -90,7 +91,7 @@ public class ShipmentService {
      * Does not change status — use {@link #updateStatus} for that.
      */
     @Transactional
-    public ShipmentResponse updateShipment(Long shipmentId, UpdateShipmentRequest request) {
+    public ShipmentResponse updateShipment(UUID shipmentId, UpdateShipmentRequest request) {
         Shipment shipment = findByIdOrThrow(shipmentId);
 
         if (request.getCarrier() != null) {
@@ -125,7 +126,7 @@ public class ShipmentService {
      * </ul>
      */
     @Transactional
-    public ShipmentResponse updateStatus(Long shipmentId, UpdateShipmentStatusRequest request) {
+    public ShipmentResponse updateStatus(UUID shipmentId, UpdateShipmentStatusRequest request) {
         Shipment shipment = findByIdOrThrow(shipmentId);
 
         if (!shipment.getStatus().canTransitionTo(request.getStatus())) {
@@ -157,12 +158,12 @@ public class ShipmentService {
     }
 
     @Transactional(readOnly = true)
-    public ShipmentResponse getById(Long shipmentId) {
+    public ShipmentResponse getById(UUID shipmentId) {
         return shipmentMapper.toResponse(findByIdOrThrow(shipmentId));
     }
 
     @Transactional(readOnly = true)
-    public ShipmentResponse getByOrderId(Long orderId) {
+    public ShipmentResponse getByOrderId(UUID orderId) {
         Shipment shipment = shipmentRepository.findByOrderId(orderId)
                 .orElseThrow(() -> new AppException(ErrorCode.SHIPMENT_NOT_FOUND));
         return shipmentMapper.toResponse(shipment);
@@ -182,7 +183,7 @@ public class ShipmentService {
      * Enforces ownership — throws {@code ORDER_NOT_FOUND} if the order belongs to another customer.
      */
     @Transactional(readOnly = true)
-    public ShipmentResponse getShipmentForCustomer(Long orderId, Customer customer) {
+    public ShipmentResponse getShipmentForCustomer(UUID orderId, Customer customer) {
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new AppException(ErrorCode.ORDER_NOT_FOUND));
 
@@ -197,7 +198,7 @@ public class ShipmentService {
 
     // ─── Internal helpers ─────────────────────────────────────────────────────
 
-    private Shipment findByIdOrThrow(Long id) {
+    private Shipment findByIdOrThrow(UUID id) {
         return shipmentRepository.findById(id)
                 .orElseThrow(() -> new AppException(ErrorCode.SHIPMENT_NOT_FOUND));
     }

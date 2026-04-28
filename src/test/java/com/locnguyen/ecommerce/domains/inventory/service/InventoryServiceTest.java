@@ -33,6 +33,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
+import java.util.UUID;
 /**
  * Unit tests for {@link InventoryService}.
  *
@@ -46,6 +47,8 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class InventoryServiceTest {
 
+    private static UUID uuid(long n) { return new UUID(0L, n); }
+
     @Mock InventoryRepository inventoryRepository;
     @Mock InventoryReservationRepository reservationRepository;
     @Mock StockMovementRepository stockMovementRepository;
@@ -57,13 +60,13 @@ class InventoryServiceTest {
 
     // ─── factories ───────────────────────────────────────────────────────────
 
-    private ProductVariant variant(long id) {
+    private ProductVariant variant(UUID id) {
         ProductVariant v = new ProductVariant();
         setId(v, id);
         return v;
     }
 
-    private Warehouse warehouse(long id) {
+    private Warehouse warehouse(UUID id) {
         Warehouse w = new Warehouse();
         setId(w, id);
         w.setName("Warehouse " + id);
@@ -71,7 +74,7 @@ class InventoryServiceTest {
         return w;
     }
 
-    private Inventory inventory(long id, ProductVariant variant, Warehouse warehouse,
+    private Inventory inventory(UUID id, ProductVariant variant, Warehouse warehouse,
                                  int onHand, int reserved) {
         Inventory inv = new Inventory();
         setId(inv, id);
@@ -82,7 +85,7 @@ class InventoryServiceTest {
         return inv;
     }
 
-    private InventoryReservation pendingReservation(long id, ProductVariant variant,
+    private InventoryReservation pendingReservation(UUID id, ProductVariant variant,
                                                      Warehouse warehouse, int quantity) {
         InventoryReservation r = new InventoryReservation();
         setId(r, id);
@@ -96,7 +99,7 @@ class InventoryServiceTest {
         return r;
     }
 
-    private ReserveStockRequest reserveRequest(Long variantId, Long warehouseId, int quantity) {
+    private ReserveStockRequest reserveRequest(UUID variantId, UUID warehouseId, int quantity) {
         ReserveStockRequest req = new ReserveStockRequest();
         req.setVariantId(variantId);
         req.setWarehouseId(warehouseId);
@@ -107,7 +110,7 @@ class InventoryServiceTest {
         return req;
     }
 
-    private static void setId(Object entity, Long id) {
+    private static void setId(Object entity, UUID id) {
         ReflectionTestUtils.setField(entity, "id", id);
     }
 
@@ -118,9 +121,9 @@ class InventoryServiceTest {
 
         @Test
         void throws_PRODUCT_VARIANT_NOT_FOUND_when_variant_missing() {
-            when(productVariantRepository.existsById(99L)).thenReturn(false);
+            when(productVariantRepository.existsById(uuid(99))).thenReturn(false);
 
-            assertThatThrownBy(() -> inventoryService.reserveStock(reserveRequest(99L, 1L, 2)))
+            assertThatThrownBy(() -> inventoryService.reserveStock(reserveRequest(uuid(99), uuid(1), 2)))
                     .isInstanceOf(AppException.class)
                     .extracting(e -> ((AppException) e).getErrorCode())
                     .isEqualTo(ErrorCode.PRODUCT_VARIANT_NOT_FOUND);
@@ -128,12 +131,12 @@ class InventoryServiceTest {
 
         @Test
         void throws_INVENTORY_NOT_FOUND_when_no_record_for_variant_warehouse() {
-            when(productVariantRepository.existsById(1L)).thenReturn(true);
-            when(warehouseService.findOrThrow(1L)).thenReturn(warehouse(1L));
-            when(inventoryRepository.findByVariantIdAndWarehouseIdWithLock(1L, 1L))
+            when(productVariantRepository.existsById(uuid(1))).thenReturn(true);
+            when(warehouseService.findOrThrow(uuid(1))).thenReturn(warehouse(uuid(1)));
+            when(inventoryRepository.findByVariantIdAndWarehouseIdWithLock(uuid(1), uuid(1)))
                     .thenReturn(Optional.empty());
 
-            assertThatThrownBy(() -> inventoryService.reserveStock(reserveRequest(1L, 1L, 2)))
+            assertThatThrownBy(() -> inventoryService.reserveStock(reserveRequest(uuid(1), uuid(1), 2)))
                     .isInstanceOf(AppException.class)
                     .extracting(e -> ((AppException) e).getErrorCode())
                     .isEqualTo(ErrorCode.INVENTORY_NOT_FOUND);
@@ -142,16 +145,16 @@ class InventoryServiceTest {
         @Test
         void throws_INVENTORY_NOT_ENOUGH_when_available_is_less_than_requested() {
             // onHand=5, reserved=4 → available=1, requesting 2
-            ProductVariant v = variant(1L);
-            Warehouse w = warehouse(1L);
-            Inventory inv = inventory(10L, v, w, 5, 4);
+            ProductVariant v = variant(uuid(1));
+            Warehouse w = warehouse(uuid(1));
+            Inventory inv = inventory(uuid(10), v, w, 5, 4);
 
-            when(productVariantRepository.existsById(1L)).thenReturn(true);
-            when(warehouseService.findOrThrow(1L)).thenReturn(w);
-            when(inventoryRepository.findByVariantIdAndWarehouseIdWithLock(1L, 1L))
+            when(productVariantRepository.existsById(uuid(1))).thenReturn(true);
+            when(warehouseService.findOrThrow(uuid(1))).thenReturn(w);
+            when(inventoryRepository.findByVariantIdAndWarehouseIdWithLock(uuid(1), uuid(1)))
                     .thenReturn(Optional.of(inv));
 
-            assertThatThrownBy(() -> inventoryService.reserveStock(reserveRequest(1L, 1L, 2)))
+            assertThatThrownBy(() -> inventoryService.reserveStock(reserveRequest(uuid(1), uuid(1), 2)))
                     .isInstanceOf(AppException.class)
                     .extracting(e -> ((AppException) e).getErrorCode())
                     .isEqualTo(ErrorCode.INVENTORY_NOT_ENOUGH);
@@ -160,18 +163,18 @@ class InventoryServiceTest {
         @Test
         void throws_STOCK_RESERVATION_FAILED_when_atomic_update_returns_zero() {
             // available=10 but the DB update fails (race condition simulation)
-            ProductVariant v = variant(1L);
-            Warehouse w = warehouse(1L);
-            Inventory inv = inventory(10L, v, w, 15, 5);
-            Inventory refreshed = inventory(10L, v, w, 15, 5);
+            ProductVariant v = variant(uuid(1));
+            Warehouse w = warehouse(uuid(1));
+            Inventory inv = inventory(uuid(10), v, w, 15, 5);
+            Inventory refreshed = inventory(uuid(10), v, w, 15, 5);
 
-            when(productVariantRepository.existsById(1L)).thenReturn(true);
-            when(warehouseService.findOrThrow(1L)).thenReturn(w);
-            when(inventoryRepository.findByVariantIdAndWarehouseIdWithLock(1L, 1L))
+            when(productVariantRepository.existsById(uuid(1))).thenReturn(true);
+            when(warehouseService.findOrThrow(uuid(1))).thenReturn(w);
+            when(inventoryRepository.findByVariantIdAndWarehouseIdWithLock(uuid(1), uuid(1)))
                     .thenReturn(Optional.of(inv));
-            when(inventoryRepository.increaseReserved(10L, 5)).thenReturn(0); // atomic check fails
+            when(inventoryRepository.increaseReserved(uuid(10), 5)).thenReturn(0); // atomic check fails
 
-            assertThatThrownBy(() -> inventoryService.reserveStock(reserveRequest(1L, 1L, 5)))
+            assertThatThrownBy(() -> inventoryService.reserveStock(reserveRequest(uuid(1), uuid(1), 5)))
                     .isInstanceOf(AppException.class)
                     .extracting(e -> ((AppException) e).getErrorCode())
                     .isEqualTo(ErrorCode.STOCK_RESERVATION_FAILED);
@@ -179,21 +182,21 @@ class InventoryServiceTest {
 
         @Test
         void happy_path_creates_reservation_record_and_records_movement() {
-            ProductVariant v = variant(1L);
-            Warehouse w = warehouse(1L);
-            Inventory inv = inventory(10L, v, w, 20, 0);
-            Inventory refreshed = inventory(10L, v, w, 20, 5);
+            ProductVariant v = variant(uuid(1));
+            Warehouse w = warehouse(uuid(1));
+            Inventory inv = inventory(uuid(10), v, w, 20, 0);
+            Inventory refreshed = inventory(uuid(10), v, w, 20, 5);
 
-            when(productVariantRepository.existsById(1L)).thenReturn(true);
-            when(warehouseService.findOrThrow(1L)).thenReturn(w);
-            when(inventoryRepository.findByVariantIdAndWarehouseIdWithLock(1L, 1L))
+            when(productVariantRepository.existsById(uuid(1))).thenReturn(true);
+            when(warehouseService.findOrThrow(uuid(1))).thenReturn(w);
+            when(inventoryRepository.findByVariantIdAndWarehouseIdWithLock(uuid(1), uuid(1)))
                     .thenReturn(Optional.of(inv));
-            when(inventoryRepository.increaseReserved(10L, 5)).thenReturn(1);
-            when(inventoryRepository.findById(10L)).thenReturn(Optional.of(refreshed));
+            when(inventoryRepository.increaseReserved(uuid(10), 5)).thenReturn(1);
+            when(inventoryRepository.findById(uuid(10))).thenReturn(Optional.of(refreshed));
             when(stockMovementRepository.save(any())).thenAnswer(i -> i.getArgument(0));
             when(reservationRepository.save(any())).thenAnswer(i -> i.getArgument(0));
 
-            InventoryReservation result = inventoryService.reserveStock(reserveRequest(1L, 1L, 5));
+            InventoryReservation result = inventoryService.reserveStock(reserveRequest(uuid(1), uuid(1), 5));
 
             assertThat(result.getStatus()).isEqualTo(ReservationStatus.PENDING);
             assertThat(result.getQuantity()).isEqualTo(5);
@@ -207,22 +210,22 @@ class InventoryServiceTest {
 
         @Test
         void reservation_expires_at_set_time_is_stored() {
-            ProductVariant v = variant(1L);
-            Warehouse w = warehouse(1L);
-            Inventory inv = inventory(10L, v, w, 20, 0);
-            Inventory refreshed = inventory(10L, v, w, 20, 3);
+            ProductVariant v = variant(uuid(1));
+            Warehouse w = warehouse(uuid(1));
+            Inventory inv = inventory(uuid(10), v, w, 20, 0);
+            Inventory refreshed = inventory(uuid(10), v, w, 20, 3);
             LocalDateTime expiresAt = LocalDateTime.now().plusHours(24);
 
-            when(productVariantRepository.existsById(1L)).thenReturn(true);
-            when(warehouseService.findOrThrow(1L)).thenReturn(w);
-            when(inventoryRepository.findByVariantIdAndWarehouseIdWithLock(1L, 1L))
+            when(productVariantRepository.existsById(uuid(1))).thenReturn(true);
+            when(warehouseService.findOrThrow(uuid(1))).thenReturn(w);
+            when(inventoryRepository.findByVariantIdAndWarehouseIdWithLock(uuid(1), uuid(1)))
                     .thenReturn(Optional.of(inv));
-            when(inventoryRepository.increaseReserved(10L, 3)).thenReturn(1);
-            when(inventoryRepository.findById(10L)).thenReturn(Optional.of(refreshed));
+            when(inventoryRepository.increaseReserved(uuid(10), 3)).thenReturn(1);
+            when(inventoryRepository.findById(uuid(10))).thenReturn(Optional.of(refreshed));
             when(stockMovementRepository.save(any())).thenAnswer(i -> i.getArgument(0));
             when(reservationRepository.save(any())).thenAnswer(i -> i.getArgument(0));
 
-            ReserveStockRequest req = reserveRequest(1L, 1L, 3);
+            ReserveStockRequest req = reserveRequest(uuid(1), uuid(1), 3);
             req.setExpiresAt(expiresAt);
 
             InventoryReservation result = inventoryService.reserveStock(req);
@@ -233,22 +236,22 @@ class InventoryServiceTest {
         @Test
         void can_reserve_exact_available_amount() {
             // onHand=10, reserved=7 → available=3, requesting exactly 3
-            ProductVariant v = variant(1L);
-            Warehouse w = warehouse(1L);
-            Inventory inv = inventory(10L, v, w, 10, 7);
-            Inventory refreshed = inventory(10L, v, w, 10, 10);
+            ProductVariant v = variant(uuid(1));
+            Warehouse w = warehouse(uuid(1));
+            Inventory inv = inventory(uuid(10), v, w, 10, 7);
+            Inventory refreshed = inventory(uuid(10), v, w, 10, 10);
 
-            when(productVariantRepository.existsById(1L)).thenReturn(true);
-            when(warehouseService.findOrThrow(1L)).thenReturn(w);
-            when(inventoryRepository.findByVariantIdAndWarehouseIdWithLock(1L, 1L))
+            when(productVariantRepository.existsById(uuid(1))).thenReturn(true);
+            when(warehouseService.findOrThrow(uuid(1))).thenReturn(w);
+            when(inventoryRepository.findByVariantIdAndWarehouseIdWithLock(uuid(1), uuid(1)))
                     .thenReturn(Optional.of(inv));
-            when(inventoryRepository.increaseReserved(10L, 3)).thenReturn(1);
-            when(inventoryRepository.findById(10L)).thenReturn(Optional.of(refreshed));
+            when(inventoryRepository.increaseReserved(uuid(10), 3)).thenReturn(1);
+            when(inventoryRepository.findById(uuid(10))).thenReturn(Optional.of(refreshed));
             when(stockMovementRepository.save(any())).thenAnswer(i -> i.getArgument(0));
             when(reservationRepository.save(any())).thenAnswer(i -> i.getArgument(0));
 
             // Must not throw
-            InventoryReservation result = inventoryService.reserveStock(reserveRequest(1L, 1L, 3));
+            InventoryReservation result = inventoryService.reserveStock(reserveRequest(uuid(1), uuid(1), 3));
 
             assertThat(result).isNotNull();
         }
@@ -267,47 +270,47 @@ class InventoryServiceTest {
 
             inventoryService.releaseStock("ORDER", "ORD202604060001");
 
-            verify(inventoryRepository, never()).decreaseReserved(anyLong(), anyInt());
+            verify(inventoryRepository, never()).decreaseReserved(any(UUID.class), anyInt());
         }
 
         @Test
         void decreases_reserved_for_each_pending_reservation() {
-            ProductVariant v = variant(1L);
-            Warehouse w = warehouse(1L);
-            Inventory inv = inventory(10L, v, w, 20, 5);
-            Inventory refreshed = inventory(10L, v, w, 20, 0);
-            InventoryReservation res = pendingReservation(1L, v, w, 5);
+            ProductVariant v = variant(uuid(1));
+            Warehouse w = warehouse(uuid(1));
+            Inventory inv = inventory(uuid(10), v, w, 20, 5);
+            Inventory refreshed = inventory(uuid(10), v, w, 20, 0);
+            InventoryReservation res = pendingReservation(uuid(1), v, w, 5);
 
             when(reservationRepository.findByReferenceTypeAndReferenceIdAndStatus(
                     "ORDER", "ORD202604060001", ReservationStatus.PENDING))
                     .thenReturn(List.of(res));
-            when(inventoryRepository.findByVariantIdAndWarehouseIdWithLock(1L, 1L))
+            when(inventoryRepository.findByVariantIdAndWarehouseIdWithLock(uuid(1), uuid(1)))
                     .thenReturn(Optional.of(inv));
-            when(inventoryRepository.decreaseReserved(10L, 5)).thenReturn(1);
-            when(inventoryRepository.findById(10L)).thenReturn(Optional.of(refreshed));
+            when(inventoryRepository.decreaseReserved(uuid(10), 5)).thenReturn(1);
+            when(inventoryRepository.findById(uuid(10))).thenReturn(Optional.of(refreshed));
             when(stockMovementRepository.save(any())).thenAnswer(i -> i.getArgument(0));
             when(reservationRepository.save(any())).thenAnswer(i -> i.getArgument(0));
 
             inventoryService.releaseStock("ORDER", "ORD202604060001");
 
-            verify(inventoryRepository).decreaseReserved(10L, 5);
+            verify(inventoryRepository).decreaseReserved(uuid(10), 5);
         }
 
         @Test
         void reservation_is_marked_RELEASED_after_release() {
-            ProductVariant v = variant(1L);
-            Warehouse w = warehouse(1L);
-            Inventory inv = inventory(10L, v, w, 20, 5);
-            Inventory refreshed = inventory(10L, v, w, 20, 0);
-            InventoryReservation res = pendingReservation(1L, v, w, 5);
+            ProductVariant v = variant(uuid(1));
+            Warehouse w = warehouse(uuid(1));
+            Inventory inv = inventory(uuid(10), v, w, 20, 5);
+            Inventory refreshed = inventory(uuid(10), v, w, 20, 0);
+            InventoryReservation res = pendingReservation(uuid(1), v, w, 5);
 
             when(reservationRepository.findByReferenceTypeAndReferenceIdAndStatus(
                     "ORDER", "ORD202604060001", ReservationStatus.PENDING))
                     .thenReturn(List.of(res));
-            when(inventoryRepository.findByVariantIdAndWarehouseIdWithLock(1L, 1L))
+            when(inventoryRepository.findByVariantIdAndWarehouseIdWithLock(uuid(1), uuid(1)))
                     .thenReturn(Optional.of(inv));
-            when(inventoryRepository.decreaseReserved(10L, 5)).thenReturn(1);
-            when(inventoryRepository.findById(10L)).thenReturn(Optional.of(refreshed));
+            when(inventoryRepository.decreaseReserved(uuid(10), 5)).thenReturn(1);
+            when(inventoryRepository.findById(uuid(10))).thenReturn(Optional.of(refreshed));
             when(stockMovementRepository.save(any())).thenAnswer(i -> i.getArgument(0));
             when(reservationRepository.save(any())).thenAnswer(i -> i.getArgument(0));
 
@@ -319,34 +322,34 @@ class InventoryServiceTest {
 
         @Test
         void releases_all_reservations_for_multi_item_order() {
-            ProductVariant v1 = variant(1L);
-            ProductVariant v2 = variant(2L);
-            Warehouse w = warehouse(1L);
-            Inventory inv1 = inventory(10L, v1, w, 20, 3);
-            Inventory inv2 = inventory(11L, v2, w, 15, 2);
-            Inventory refreshed1 = inventory(10L, v1, w, 20, 0);
-            Inventory refreshed2 = inventory(11L, v2, w, 15, 0);
-            InventoryReservation res1 = pendingReservation(1L, v1, w, 3);
-            InventoryReservation res2 = pendingReservation(2L, v2, w, 2);
+            ProductVariant v1 = variant(uuid(1));
+            ProductVariant v2 = variant(uuid(2));
+            Warehouse w = warehouse(uuid(1));
+            Inventory inv1 = inventory(uuid(10), v1, w, 20, 3);
+            Inventory inv2 = inventory(uuid(11), v2, w, 15, 2);
+            Inventory refreshed1 = inventory(uuid(10), v1, w, 20, 0);
+            Inventory refreshed2 = inventory(uuid(11), v2, w, 15, 0);
+            InventoryReservation res1 = pendingReservation(uuid(1), v1, w, 3);
+            InventoryReservation res2 = pendingReservation(uuid(2), v2, w, 2);
 
             when(reservationRepository.findByReferenceTypeAndReferenceIdAndStatus(
                     "ORDER", "ORD202604060001", ReservationStatus.PENDING))
                     .thenReturn(List.of(res1, res2));
-            when(inventoryRepository.findByVariantIdAndWarehouseIdWithLock(1L, 1L))
+            when(inventoryRepository.findByVariantIdAndWarehouseIdWithLock(uuid(1), uuid(1)))
                     .thenReturn(Optional.of(inv1));
-            when(inventoryRepository.findByVariantIdAndWarehouseIdWithLock(2L, 1L))
+            when(inventoryRepository.findByVariantIdAndWarehouseIdWithLock(uuid(2), uuid(1)))
                     .thenReturn(Optional.of(inv2));
-            when(inventoryRepository.decreaseReserved(10L, 3)).thenReturn(1);
-            when(inventoryRepository.decreaseReserved(11L, 2)).thenReturn(1);
-            when(inventoryRepository.findById(10L)).thenReturn(Optional.of(refreshed1));
-            when(inventoryRepository.findById(11L)).thenReturn(Optional.of(refreshed2));
+            when(inventoryRepository.decreaseReserved(uuid(10), 3)).thenReturn(1);
+            when(inventoryRepository.decreaseReserved(uuid(11), 2)).thenReturn(1);
+            when(inventoryRepository.findById(uuid(10))).thenReturn(Optional.of(refreshed1));
+            when(inventoryRepository.findById(uuid(11))).thenReturn(Optional.of(refreshed2));
             when(stockMovementRepository.save(any())).thenAnswer(i -> i.getArgument(0));
             when(reservationRepository.save(any())).thenAnswer(i -> i.getArgument(0));
 
             inventoryService.releaseStock("ORDER", "ORD202604060001");
 
-            verify(inventoryRepository).decreaseReserved(10L, 3);
-            verify(inventoryRepository).decreaseReserved(11L, 2);
+            verify(inventoryRepository).decreaseReserved(uuid(10), 3);
+            verify(inventoryRepository).decreaseReserved(uuid(11), 2);
             verify(reservationRepository, times(2)).save(any());
         }
     }
@@ -364,30 +367,30 @@ class InventoryServiceTest {
 
             inventoryService.completeOrder("ORDER", "ORD202604060001");
 
-            verify(inventoryRepository, never()).decreaseOnHandAndReserved(anyLong(), anyInt());
+            verify(inventoryRepository, never()).decreaseOnHandAndReserved(any(UUID.class), anyInt());
         }
 
         @Test
         void decreases_both_onHand_and_reserved_on_completion() {
-            ProductVariant v = variant(1L);
-            Warehouse w = warehouse(1L);
-            Inventory inv = inventory(10L, v, w, 20, 5);
-            Inventory refreshed = inventory(10L, v, w, 15, 0);
-            InventoryReservation res = pendingReservation(1L, v, w, 5);
+            ProductVariant v = variant(uuid(1));
+            Warehouse w = warehouse(uuid(1));
+            Inventory inv = inventory(uuid(10), v, w, 20, 5);
+            Inventory refreshed = inventory(uuid(10), v, w, 15, 0);
+            InventoryReservation res = pendingReservation(uuid(1), v, w, 5);
 
             when(reservationRepository.findByReferenceTypeAndReferenceIdAndStatus(
                     "ORDER", "ORD202604060001", ReservationStatus.PENDING))
                     .thenReturn(List.of(res));
-            when(inventoryRepository.findByVariantIdAndWarehouseIdWithLock(1L, 1L))
+            when(inventoryRepository.findByVariantIdAndWarehouseIdWithLock(uuid(1), uuid(1)))
                     .thenReturn(Optional.of(inv));
-            when(inventoryRepository.decreaseOnHandAndReserved(10L, 5)).thenReturn(1);
-            when(inventoryRepository.findById(10L)).thenReturn(Optional.of(refreshed));
+            when(inventoryRepository.decreaseOnHandAndReserved(uuid(10), 5)).thenReturn(1);
+            when(inventoryRepository.findById(uuid(10))).thenReturn(Optional.of(refreshed));
             when(stockMovementRepository.save(any())).thenAnswer(i -> i.getArgument(0));
             when(reservationRepository.save(any())).thenAnswer(i -> i.getArgument(0));
 
             inventoryService.completeOrder("ORDER", "ORD202604060001");
 
-            verify(inventoryRepository).decreaseOnHandAndReserved(10L, 5);
+            verify(inventoryRepository).decreaseOnHandAndReserved(uuid(10), 5);
             // Reservation should be marked RELEASED
             verify(reservationRepository).save(argThat(
                     r -> r.getStatus() == ReservationStatus.RELEASED));
@@ -395,19 +398,19 @@ class InventoryServiceTest {
 
         @Test
         void records_EXPORT_movement_on_order_completion() {
-            ProductVariant v = variant(1L);
-            Warehouse w = warehouse(1L);
-            Inventory inv = inventory(10L, v, w, 20, 5);
-            Inventory refreshed = inventory(10L, v, w, 15, 0);
-            InventoryReservation res = pendingReservation(1L, v, w, 5);
+            ProductVariant v = variant(uuid(1));
+            Warehouse w = warehouse(uuid(1));
+            Inventory inv = inventory(uuid(10), v, w, 20, 5);
+            Inventory refreshed = inventory(uuid(10), v, w, 15, 0);
+            InventoryReservation res = pendingReservation(uuid(1), v, w, 5);
 
             when(reservationRepository.findByReferenceTypeAndReferenceIdAndStatus(
                     "ORDER", "ORD202604060001", ReservationStatus.PENDING))
                     .thenReturn(List.of(res));
-            when(inventoryRepository.findByVariantIdAndWarehouseIdWithLock(1L, 1L))
+            when(inventoryRepository.findByVariantIdAndWarehouseIdWithLock(uuid(1), uuid(1)))
                     .thenReturn(Optional.of(inv));
-            when(inventoryRepository.decreaseOnHandAndReserved(10L, 5)).thenReturn(1);
-            when(inventoryRepository.findById(10L)).thenReturn(Optional.of(refreshed));
+            when(inventoryRepository.decreaseOnHandAndReserved(uuid(10), 5)).thenReturn(1);
+            when(inventoryRepository.findById(uuid(10))).thenReturn(Optional.of(refreshed));
             when(stockMovementRepository.save(any())).thenAnswer(i -> i.getArgument(0));
             when(reservationRepository.save(any())).thenAnswer(i -> i.getArgument(0));
 
@@ -425,10 +428,10 @@ class InventoryServiceTest {
 
         @Test
         void throws_PRODUCT_VARIANT_NOT_FOUND_when_variant_missing() {
-            when(productVariantRepository.existsById(99L)).thenReturn(false);
+            when(productVariantRepository.existsById(uuid(99))).thenReturn(false);
 
             assertThatThrownBy(() ->
-                    inventoryService.importStock(99L, 1L, 10, "Initial import"))
+                    inventoryService.importStock(uuid(99), uuid(1), 10, "Initial import"))
                     .isInstanceOf(AppException.class)
                     .extracting(e -> ((AppException) e).getErrorCode())
                     .isEqualTo(ErrorCode.PRODUCT_VARIANT_NOT_FOUND);
@@ -436,43 +439,43 @@ class InventoryServiceTest {
 
         @Test
         void creates_new_inventory_record_if_none_exists() {
-            ProductVariant v = variant(1L);
-            Warehouse w = warehouse(1L);
-            Inventory newInv = inventory(10L, v, w, 0, 0);
-            Inventory refreshed = inventory(10L, v, w, 50, 0);
+            ProductVariant v = variant(uuid(1));
+            Warehouse w = warehouse(uuid(1));
+            Inventory newInv = inventory(uuid(10), v, w, 0, 0);
+            Inventory refreshed = inventory(uuid(10), v, w, 50, 0);
 
-            when(productVariantRepository.existsById(1L)).thenReturn(true);
-            when(warehouseService.findOrThrow(1L)).thenReturn(w);
+            when(productVariantRepository.existsById(uuid(1))).thenReturn(true);
+            when(warehouseService.findOrThrow(uuid(1))).thenReturn(w);
             // First call: not found → getOrCreateInventory creates it
-            when(inventoryRepository.findByVariantIdAndWarehouseId(1L, 1L))
+            when(inventoryRepository.findByVariantIdAndWarehouseId(uuid(1), uuid(1)))
                     .thenReturn(Optional.empty());
-            when(productVariantRepository.findById(1L)).thenReturn(Optional.of(v));
+            when(productVariantRepository.findById(uuid(1))).thenReturn(Optional.of(v));
             when(inventoryRepository.save(any())).thenReturn(newInv);
-            when(inventoryRepository.increaseOnHand(10L, 50)).thenReturn(1);
-            when(inventoryRepository.findById(10L)).thenReturn(Optional.of(refreshed));
+            when(inventoryRepository.increaseOnHand(uuid(10), 50)).thenReturn(1);
+            when(inventoryRepository.findById(uuid(10))).thenReturn(Optional.of(refreshed));
             when(stockMovementRepository.save(any())).thenAnswer(i -> i.getArgument(0));
 
-            inventoryService.importStock(1L, 1L, 50, "First import");
+            inventoryService.importStock(uuid(1), uuid(1), 50, "First import");
 
-            verify(inventoryRepository).increaseOnHand(10L, 50);
+            verify(inventoryRepository).increaseOnHand(uuid(10), 50);
         }
 
         @Test
         void records_IMPORT_movement_with_correct_before_after_values() {
-            ProductVariant v = variant(1L);
-            Warehouse w = warehouse(1L);
-            Inventory inv = inventory(10L, v, w, 20, 3);
-            Inventory refreshed = inventory(10L, v, w, 30, 3);
+            ProductVariant v = variant(uuid(1));
+            Warehouse w = warehouse(uuid(1));
+            Inventory inv = inventory(uuid(10), v, w, 20, 3);
+            Inventory refreshed = inventory(uuid(10), v, w, 30, 3);
 
-            when(productVariantRepository.existsById(1L)).thenReturn(true);
-            when(warehouseService.findOrThrow(1L)).thenReturn(w);
-            when(inventoryRepository.findByVariantIdAndWarehouseId(1L, 1L))
+            when(productVariantRepository.existsById(uuid(1))).thenReturn(true);
+            when(warehouseService.findOrThrow(uuid(1))).thenReturn(w);
+            when(inventoryRepository.findByVariantIdAndWarehouseId(uuid(1), uuid(1)))
                     .thenReturn(Optional.of(inv));
-            when(inventoryRepository.increaseOnHand(10L, 10)).thenReturn(1);
-            when(inventoryRepository.findById(10L)).thenReturn(Optional.of(refreshed));
+            when(inventoryRepository.increaseOnHand(uuid(10), 10)).thenReturn(1);
+            when(inventoryRepository.findById(uuid(10))).thenReturn(Optional.of(refreshed));
             when(stockMovementRepository.save(any())).thenAnswer(i -> i.getArgument(0));
 
-            inventoryService.importStock(1L, 1L, 10, "Restock");
+            inventoryService.importStock(uuid(1), uuid(1), 10, "Restock");
 
             verify(stockMovementRepository).save(argThat(m ->
                     m.getMovementType() == StockMovementType.IMPORT
@@ -490,18 +493,18 @@ class InventoryServiceTest {
         @Test
         void throws_INVENTORY_NOT_ENOUGH_when_would_go_below_reserved() {
             // DB guard returns 0 (would breach reserved floor)
-            ProductVariant v = variant(1L);
-            Warehouse w = warehouse(1L);
-            Inventory inv = inventory(10L, v, w, 5, 5);
+            ProductVariant v = variant(uuid(1));
+            Warehouse w = warehouse(uuid(1));
+            Inventory inv = inventory(uuid(10), v, w, 5, 5);
 
-            when(productVariantRepository.existsById(1L)).thenReturn(true);
-            when(warehouseService.findOrThrow(1L)).thenReturn(w);
-            when(inventoryRepository.findByVariantIdAndWarehouseId(1L, 1L))
+            when(productVariantRepository.existsById(uuid(1))).thenReturn(true);
+            when(warehouseService.findOrThrow(uuid(1))).thenReturn(w);
+            when(inventoryRepository.findByVariantIdAndWarehouseId(uuid(1), uuid(1)))
                     .thenReturn(Optional.of(inv));
-            when(inventoryRepository.decreaseOnHand(10L, 1)).thenReturn(0); // blocked by DB check
+            when(inventoryRepository.decreaseOnHand(uuid(10), 1)).thenReturn(0); // blocked by DB check
 
             assertThatThrownBy(() ->
-                    inventoryService.exportStock(1L, 1L, 1, "Manual export"))
+                    inventoryService.exportStock(uuid(1), uuid(1), 1, "Manual export"))
                     .isInstanceOf(AppException.class)
                     .extracting(e -> ((AppException) e).getErrorCode())
                     .isEqualTo(ErrorCode.INVENTORY_NOT_ENOUGH);
@@ -509,13 +512,13 @@ class InventoryServiceTest {
 
         @Test
         void throws_INVENTORY_NOT_FOUND_when_no_inventory_record() {
-            when(productVariantRepository.existsById(1L)).thenReturn(true);
-            when(warehouseService.findOrThrow(1L)).thenReturn(warehouse(1L));
-            when(inventoryRepository.findByVariantIdAndWarehouseId(1L, 1L))
+            when(productVariantRepository.existsById(uuid(1))).thenReturn(true);
+            when(warehouseService.findOrThrow(uuid(1))).thenReturn(warehouse(uuid(1)));
+            when(inventoryRepository.findByVariantIdAndWarehouseId(uuid(1), uuid(1)))
                     .thenReturn(Optional.empty());
 
             assertThatThrownBy(() ->
-                    inventoryService.exportStock(1L, 1L, 5, "Export"))
+                    inventoryService.exportStock(uuid(1), uuid(1), 5, "Export"))
                     .isInstanceOf(AppException.class)
                     .extracting(e -> ((AppException) e).getErrorCode())
                     .isEqualTo(ErrorCode.INVENTORY_NOT_FOUND);
@@ -538,37 +541,37 @@ class InventoryServiceTest {
 
         @Test
         void returns_count_of_successfully_released_reservations() {
-            ProductVariant v1 = variant(1L);
-            ProductVariant v2 = variant(2L);
-            Warehouse w = warehouse(1L);
+            ProductVariant v1 = variant(uuid(1));
+            ProductVariant v2 = variant(uuid(2));
+            Warehouse w = warehouse(uuid(1));
 
-            InventoryReservation r1 = pendingReservation(1L, v1, w, 3);
-            InventoryReservation r2 = pendingReservation(2L, v2, w, 2);
+            InventoryReservation r1 = pendingReservation(uuid(1), v1, w, 3);
+            InventoryReservation r2 = pendingReservation(uuid(2), v2, w, 2);
 
             when(reservationRepository.findExpiredReservations(any()))
                     .thenReturn(List.of(r1, r2));
 
             // For each releaseStockForVariant call, stub the inner reservation lookup
             when(reservationRepository.findByReferenceTypeAndReferenceIdAndVariantIdAndStatus(
-                    eq("ORDER"), eq("ORD202604060001"), eq(1L), eq(ReservationStatus.PENDING)))
+                    eq("ORDER"), eq("ORD202604060001"), eq(uuid(1)), eq(ReservationStatus.PENDING)))
                     .thenReturn(Optional.of(r1));
             when(reservationRepository.findByReferenceTypeAndReferenceIdAndVariantIdAndStatus(
-                    eq("ORDER"), eq("ORD202604060001"), eq(2L), eq(ReservationStatus.PENDING)))
+                    eq("ORDER"), eq("ORD202604060001"), eq(uuid(2)), eq(ReservationStatus.PENDING)))
                     .thenReturn(Optional.of(r2));
 
-            Inventory inv1 = inventory(10L, v1, w, 10, 3);
-            Inventory inv2 = inventory(11L, v2, w, 10, 2);
-            Inventory refreshed1 = inventory(10L, v1, w, 10, 0);
-            Inventory refreshed2 = inventory(11L, v2, w, 10, 0);
+            Inventory inv1 = inventory(uuid(10), v1, w, 10, 3);
+            Inventory inv2 = inventory(uuid(11), v2, w, 10, 2);
+            Inventory refreshed1 = inventory(uuid(10), v1, w, 10, 0);
+            Inventory refreshed2 = inventory(uuid(11), v2, w, 10, 0);
 
-            when(inventoryRepository.findByVariantIdAndWarehouseIdWithLock(1L, 1L))
+            when(inventoryRepository.findByVariantIdAndWarehouseIdWithLock(uuid(1), uuid(1)))
                     .thenReturn(Optional.of(inv1));
-            when(inventoryRepository.findByVariantIdAndWarehouseIdWithLock(2L, 1L))
+            when(inventoryRepository.findByVariantIdAndWarehouseIdWithLock(uuid(2), uuid(1)))
                     .thenReturn(Optional.of(inv2));
-            when(inventoryRepository.decreaseReserved(10L, 3)).thenReturn(1);
-            when(inventoryRepository.decreaseReserved(11L, 2)).thenReturn(1);
-            when(inventoryRepository.findById(10L)).thenReturn(Optional.of(refreshed1));
-            when(inventoryRepository.findById(11L)).thenReturn(Optional.of(refreshed2));
+            when(inventoryRepository.decreaseReserved(uuid(10), 3)).thenReturn(1);
+            when(inventoryRepository.decreaseReserved(uuid(11), 2)).thenReturn(1);
+            when(inventoryRepository.findById(uuid(10))).thenReturn(Optional.of(refreshed1));
+            when(inventoryRepository.findById(uuid(11))).thenReturn(Optional.of(refreshed2));
             when(stockMovementRepository.save(any())).thenAnswer(i -> i.getArgument(0));
             when(reservationRepository.save(any())).thenAnswer(i -> i.getArgument(0));
 

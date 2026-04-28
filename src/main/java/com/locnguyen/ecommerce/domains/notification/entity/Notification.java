@@ -8,8 +8,11 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.ToString;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.time.LocalDateTime;
+import java.util.UUID;
 
 /**
  * In-app notification for a customer.
@@ -45,7 +48,8 @@ public class Notification extends BaseEntity {
 
     /** PK of the related domain entity, if applicable (e.g., orderId, reviewId). */
     @Column(name = "reference_id")
-    private Long referenceId;
+    @JdbcTypeCode(SqlTypes.CHAR)
+    private UUID referenceId;
 
     /** Domain type of the related entity, e.g. "ORDER", "REVIEW". */
     @Column(name = "reference_type", length = 50)

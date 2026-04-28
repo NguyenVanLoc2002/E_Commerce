@@ -21,6 +21,9 @@
         <mapstruct.version>1.5.5.Final</mapstruct.version>
         <jjwt.version>0.12.6</jjwt.version>
         <springdoc.version>2.6.0</springdoc.version>
+        <!-- Override Spring Boot 3.3's managed Flyway (10.17) to a build that
+             officially supports MariaDB 11.3+. -->
+        <flyway.version>11.10.5</flyway.version>
     </properties>
 
     <dependencies>

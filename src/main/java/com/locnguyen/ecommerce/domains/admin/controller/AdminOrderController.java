@@ -16,6 +16,7 @@ import org.springframework.data.web.PageableDefault;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.UUID;
 /**
  * Admin order management API.
  *
@@ -47,7 +48,7 @@ public class AdminOrderController {
 
     @Operation(summary = "Get order detail by ID (no ownership check)")
     @GetMapping("/{id}")
-    public ApiResponse<OrderResponse> getOrderById(@PathVariable Long id) {
+    public ApiResponse<OrderResponse> getOrderById(@PathVariable UUID id) {
         return ApiResponse.success(orderService.getOrderByIdAdmin(id));
     }
 
@@ -61,13 +62,13 @@ public class AdminOrderController {
 
     @Operation(summary = "Confirm order — PENDING / AWAITING_PAYMENT → CONFIRMED")
     @PostMapping("/{id}/confirm")
-    public ApiResponse<OrderResponse> confirmOrder(@PathVariable Long id) {
+    public ApiResponse<OrderResponse> confirmOrder(@PathVariable UUID id) {
         return ApiResponse.success(orderService.confirmOrder(id));
     }
 
     @Operation(summary = "Mark order as PROCESSING — CONFIRMED → PROCESSING")
     @PostMapping("/{id}/process")
-    public ApiResponse<OrderResponse> processOrder(@PathVariable Long id) {
+    public ApiResponse<OrderResponse> processOrder(@PathVariable UUID id) {
         return ApiResponse.success(orderService.processOrder(id));
     }
 
@@ -76,13 +77,13 @@ public class AdminOrderController {
         description = "Note: SHIPPED status is set automatically when a shipment is created via the shipment API."
     )
     @PostMapping("/{id}/deliver")
-    public ApiResponse<OrderResponse> deliverOrder(@PathVariable Long id) {
+    public ApiResponse<OrderResponse> deliverOrder(@PathVariable UUID id) {
         return ApiResponse.success(orderService.deliverOrder(id));
     }
 
     @Operation(summary = "Complete order — DELIVERED → COMPLETED (commits reserved stock)")
     @PostMapping("/{id}/complete")
-    public ApiResponse<OrderResponse> completeOrder(@PathVariable Long id) {
+    public ApiResponse<OrderResponse> completeOrder(@PathVariable UUID id) {
         return ApiResponse.success(orderService.completeOrder(id));
     }
 
@@ -92,7 +93,7 @@ public class AdminOrderController {
     )
     @PostMapping("/{id}/cancel")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN')")
-    public ApiResponse<OrderResponse> cancelOrder(@PathVariable Long id) {
+    public ApiResponse<OrderResponse> cancelOrder(@PathVariable UUID id) {
         return ApiResponse.success(orderService.cancelOrder(id));
     }
 }

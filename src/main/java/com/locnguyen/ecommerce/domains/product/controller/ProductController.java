@@ -11,9 +11,11 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.UUID;
 /**
  * Public product catalog endpoints (no authentication required).
  * Admin CRUD lives in {@link com.locnguyen.ecommerce.domains.admin.controller.AdminProductController}.
@@ -30,13 +32,17 @@ public class ProductController {
     @GetMapping
     public ApiResponse<PagedResponse<ProductListItemResponse>> getProducts(
             ProductFilter filter,
-            @PageableDefault(size = AppConstants.DEFAULT_PAGE_SIZE, sort = "createdAt,desc") Pageable pageable) {
+            @PageableDefault(
+                    size = AppConstants.DEFAULT_PAGE_SIZE,
+                    sort = "createdAt",
+                    direction = Sort.Direction.DESC
+            ) Pageable pageable) {
         return ApiResponse.success(productService.getPublishedProducts(filter, pageable));
     }
 
     @Operation(summary = "Get published product detail with variants and media")
     @GetMapping("/{id}")
-    public ApiResponse<ProductDetailResponse> getProduct(@PathVariable Long id) {
+    public ApiResponse<ProductDetailResponse> getProduct(@PathVariable UUID id) {
         return ApiResponse.success(productService.getProductById(id));
     }
 }

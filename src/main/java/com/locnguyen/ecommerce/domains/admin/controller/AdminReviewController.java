@@ -17,6 +17,7 @@ import org.springframework.data.web.PageableDefault;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.UUID;
 /**
  * Admin review moderation API.
  *
@@ -45,14 +46,14 @@ public class AdminReviewController {
 
     @Operation(summary = "Get a review by ID")
     @GetMapping("/{id}")
-    public ApiResponse<ReviewResponse> getReviewById(@PathVariable Long id) {
+    public ApiResponse<ReviewResponse> getReviewById(@PathVariable UUID id) {
         return ApiResponse.success(reviewService.getReviewById(id));
     }
 
     @Operation(summary = "Approve or reject a pending review")
     @PatchMapping("/{id}/moderate")
     public ApiResponse<ReviewResponse> moderateReview(
-            @PathVariable Long id,
+            @PathVariable UUID id,
             @Valid @RequestBody ModerateReviewRequest request) {
         return ApiResponse.success(reviewService.moderateReview(id, request));
     }
@@ -60,7 +61,7 @@ public class AdminReviewController {
     @Operation(summary = "Soft-delete a review")
     @DeleteMapping("/{id}")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN')")
-    public ApiResponse<Void> deleteReview(@PathVariable Long id) {
+    public ApiResponse<Void> deleteReview(@PathVariable UUID id) {
         reviewService.deleteReview(id);
         return ApiResponse.noContent();
     }

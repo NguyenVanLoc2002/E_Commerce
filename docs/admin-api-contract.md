@@ -1,1606 +1,1160 @@
 # Admin API Contract
 
-> **Audience:** `admin-web` (ReactJS)
-> **Audited against source code on 2026-04-20.**
-> See `api-common.md` for shared conventions (response envelope, auth, enums, pagination).
+Audience: admin web and internal back-office tooling integrating with the backend at `T:\Project\ecommerce-backend`.
+
+Source of truth:
+- Admin controllers under `src/main/java/com/locnguyen/ecommerce/domains/admin/controller`
+- Admin-only controllers still living in domain packages:
+  - `src/main/java/com/locnguyen/ecommerce/domains/notification/controller/AdminNotificationController.java`
+  - `src/main/java/com/locnguyen/ecommerce/domains/review/controller/AdminReviewController.java`
+- DTOs, services, and shared response/error types under `src/main/java/com/locnguyen/ecommerce`
+
+This document only describes endpoints implemented in the current source code.
 
 ---
 
-## Overview
+## Common conventions
 
-- **Base URL:** `/api/v1`
-- **Auth:** `Authorization: Bearer <access_token>` (required for all admin endpoints)
-- **Role guard:** All `/api/v1/admin/**` paths require at minimum `STAFF` role via `SecurityConfig`. Individual endpoints add stricter `@PreAuthorize` where noted.
-- **Role hierarchy:** `SUPER_ADMIN > ADMIN > STAFF > CUSTOMER`
+Base path:
+- `/api/v1`
 
----
+Authentication:
+- All endpoints here require `Authorization: Bearer <accessToken>`.
+- URL rule: `/api/v1/admin/**` requires at least `STAFF`.
+- Role hierarchy: `SUPER_ADMIN > ADMIN > STAFF > CUSTOMER`.
+- Method-level restrictions are applied with `@PreAuthorize` where stricter rules are needed.
 
-## Table of Contents
-
-1. [Authentication](#1-authentication)
-2. [User Management](#2-user-management)
-3. [Category Management](#3-category-management)
-4. [Brand Management](#4-brand-management)
-5. [Product Management](#5-product-management)
-6. [Variant Management](#6-variant-management)
-7. [Inventory & Warehouse](#7-inventory--warehouse)
-8. [Order Management](#8-order-management)
-9. [Payment Management](#9-payment-management)
-10. [Shipment Management](#10-shipment-management)
-11. [Invoice Management](#11-invoice-management)
-12. [Promotion Management](#12-promotion-management)
-13. [Voucher Management](#13-voucher-management)
-14. [Review Moderation](#14-review-moderation)
-15. [Missing Admin Endpoints](#15-missing-admin-endpoints)
-
----
-
-## 1. Authentication
-
-Auth endpoints are shared with the customer app. See `app-api-contract.md §1`.
-
-Admin users authenticate via the same `POST /api/v1/auth/login` endpoint. Their JWT will carry `ADMIN`, `STAFF`, or `SUPER_ADMIN` roles.
-
----
-
-## 2. User Management
-
-### 2.1 Create System User
-
-- **Module:** Admin — User
-- **Endpoint:** `POST /api/v1/admin/users`
-- **Description:** Create a system user (STAFF, ADMIN, SUPER_ADMIN) with explicit role assignment. Does NOT create a customer profile. For customer registration use the public `/auth/register` endpoint.
-- **Auth:** Bearer Token
-- **Allowed roles:** `ADMIN` (`@PreAuthorize("hasRole('ADMIN')")` — SUPER_ADMIN qualifies via role hierarchy)
-
-#### Request Body
-
-```json
-{
-  "email": "staff@example.com",
-  "password": "AdminPass123",
-  "firstName": "Nguyen",
-  "lastName": "Van Loc",
-  "phoneNumber": "0912345678",
-  "roles": ["STAFF"]
-}
-```
-
-| Field | Type | Required | Nullable | Validation | Description |
-|---|---|:---:|:---:|---|---|
-| `email` | string | ✓ | No | valid email, max 255 | Login identifier |
-| `password` | string | ✓ | No | 8–64 chars, 1 upper, 1 lower, 1 digit | Plain text — hashed server-side |
-| `firstName` | string | ✓ | No | max 100 | First name |
-| `lastName` | string | — | Yes | max 100 | Last name |
-| `phoneNumber` | string | — | Yes | Vietnamese phone format | Phone number |
-| `roles` | array[string] | ✓ | No | non-empty, valid `RoleName` values | Roles to assign |
-
-Valid `roles` values: `SUPER_ADMIN`, `ADMIN`, `STAFF`. Do not use `CUSTOMER` here.
-
-#### Response (201 Created)
-
-```json
-{
-  "success": true,
-  "code": "SUCCESS",
-  "message": "Created successfully",
-  "data": {
-    "id": 42,
-    "email": "staff@example.com",
-    "firstName": "Nguyen",
-    "lastName": "Van Loc",
-    "phoneNumber": "0912345678",
-    "status": "ACTIVE",
-    "roles": ["STAFF"],
-    "createdAt": "2026-04-20T08:00:00Z"
-  },
-  "timestamp": "2026-04-20T08:00:00Z"
-}
-```
-
-#### Response (ERROR)
-
-| HTTP | Code | When |
-|---|---|---|
-| 409 | `EMAIL_ALREADY_EXISTS` | Email already registered |
-| 409 | `PHONE_ALREADY_EXISTS` | Phone already registered |
-| 400 | `BAD_REQUEST` | Role name not found in seed data |
-| 422 | `VALIDATION_ERROR` | DTO validation failed |
-| 403 | `FORBIDDEN` | Caller has STAFF role (ADMIN required) |
-
----
-
-## 3. Category Management
-
-### 3.1 List Active Categories
-
-- **Endpoint:** `GET /api/v1/categories`
-- **Auth:** Public (also accessible to admin)
-- See `app-api-contract.md §2.1`
-
-### 3.2 Get Category by ID
-
-- **Endpoint:** `GET /api/v1/categories/{id}`
-- **Auth:** Public
-- See `app-api-contract.md §2.2`
-
-### 3.3 Create Category
-
-- **Endpoint:** `POST /api/v1/admin/categories`
-- **Auth:** Bearer Token
-- **Allowed roles:** `STAFF`, `ADMIN`, `SUPER_ADMIN` (path-level guard via SecurityConfig; no method-level `@PreAuthorize`)
-
-#### Request Body
-
-```json
-{
-  "name": "Áo",
-  "slug": "ao",
-  "description": "Danh mục áo",
-  "parentId": null,
-  "imageUrl": "https://cdn.example.com/categories/ao.jpg",
-  "sortOrder": 1
-}
-```
-
-| Field | Type | Required | Nullable | Validation | Description |
-|---|---|:---:|:---:|---|---|
-| `name` | string | ✓ | No | max 100 | Category name |
-| `slug` | string | ✓ | No | max 255, unique | URL slug |
-| `description` | string | — | Yes | — | Description |
-| `parentId` | long | — | Yes | existing category ID | Parent category |
-| `imageUrl` | string | — | Yes | — | Cover image URL |
-| `sortOrder` | integer | — | Yes | — | Display order |
-
-> **Note:** `status` is not accepted on create — defaults to `ACTIVE` server-side.
-
-#### Response (201)
-
-```json
-{
-  "data": {
-    "id": 1,
-    "name": "Áo",
-    "slug": "ao",
-    "description": "Danh mục áo",
-    "parentId": null,
-    "imageUrl": "https://cdn.example.com/categories/ao.jpg",
-    "status": "ACTIVE",
-    "sortOrder": 1,
-    "createdAt": "2026-04-20T08:00:00Z"
-  }
-}
-```
-
-#### Response (ERROR)
-
-| HTTP | Code | When |
-|---|---|---|
-| 409 | `SLUG_ALREADY_EXISTS` | Slug already in use |
-| 422 | `VALIDATION_ERROR` | Validation failed |
-
-### 3.4 Update Category
-
-- **Endpoint:** `PATCH /api/v1/admin/categories/{id}`
-- **Auth:** Bearer Token
-- **Allowed roles:** `STAFF`, `ADMIN`, `SUPER_ADMIN`
-- **Path params:** `id` (long) — category ID
-
-All fields optional (partial update).
-
-| Field | Type | Nullable | Validation | Description |
-|---|---|:---:|---|---|
-| `name` | string | Yes | max 100 | Category name |
-| `slug` | string | Yes | max 255 | URL slug |
-| `description` | string | Yes | — | Description |
-| `parentId` | long | Yes | existing category ID | Parent category |
-| `imageUrl` | string | Yes | — | Cover image URL |
-| `status` | string | Yes | `CategoryStatus` enum | `ACTIVE`, `INACTIVE` |
-| `sortOrder` | integer | Yes | — | Display order |
-
-#### Response (ERROR)
-
-| HTTP | Code | When |
-|---|---|---|
-| 404 | `CATEGORY_NOT_FOUND` | Category does not exist |
-| 409 | `SLUG_ALREADY_EXISTS` | Slug conflict |
-
-### 3.5 Delete Category (Soft)
-
-- **Endpoint:** `DELETE /api/v1/admin/categories/{id}`
-- **Auth:** Bearer Token
-- **Allowed roles:** `STAFF`, `ADMIN`, `SUPER_ADMIN`
-
-Returns `200` with `data: null`.
-
----
-
-## 4. Brand Management
-
-### 4.1 List Brands
-
-- **Endpoint:** `GET /api/v1/admin/brands`
-- **Auth:** Bearer Token
-- **Allowed roles:** `STAFF`, `ADMIN`, `SUPER_ADMIN`
-- **Pagination:** `@PageableDefault(size=20, sort="sortOrder")` via Spring Pageable.
-
-#### Query Params (BrandFilter)
-
-All params are optional.
-
-| Param | Type | Required | Description |
-|---|---|:---:|---|
-| `name` | string | — | Partial, case-insensitive match on brand name |
-| `status` | string | — | `ACTIVE` or `INACTIVE` |
-| `page` | integer | — | Default: `0` |
-| `size` | integer | — | Default: `20` |
-| `sort` | string | — | Spring Pageable format, e.g., `sort=name,asc` (default: `sortOrder,asc`) |
-
-#### Response (200) — Paginated `BrandResponse`
+Success wrapper:
 
 ```json
 {
   "success": true,
   "code": "SUCCESS",
   "message": "Request processed successfully",
-  "data": {
-    "items": [
-      {
-        "id": 1,
-        "name": "Nike",
-        "slug": "nike",
-        "logoUrl": "https://cdn.example.com/brands/nike.png",
-        "description": "American sportswear brand",
-        "sortOrder": 0,
-        "status": "ACTIVE",
-        "createdAt": "2026-04-20T08:00:00Z"
-      }
-    ],
-    "page": 0,
-    "size": 20,
-    "totalItems": 5,
-    "totalPages": 1,
-    "hasNext": false,
-    "hasPrevious": false
-  },
-  "timestamp": "2026-04-20T08:00:00Z"
+  "data": {},
+  "timestamp": "2026-04-27T10:00:00Z"
 }
 ```
 
-### 4.2 Create Brand
-
-- **Endpoint:** `POST /api/v1/admin/brands`
-- **Auth:** Bearer Token
-- **Allowed roles:** `STAFF`, `ADMIN`, `SUPER_ADMIN` (path-level guard via SecurityConfig; no method-level `@PreAuthorize`)
-
-#### Request Body
+Error wrapper:
 
 ```json
 {
-  "name": "Nike",
-  "slug": "nike",
-  "logoUrl": "https://cdn.example.com/brands/nike.png",
-  "description": "American sportswear brand"
+  "success": false,
+  "code": "VALIDATION_ERROR",
+  "message": "Validation failed",
+  "errors": [
+    { "field": "name", "message": "Name is required" }
+  ],
+  "timestamp": "2026-04-27T10:00:00Z",
+  "path": "/api/v1/admin/brands"
 }
 ```
 
-| Field | Type | Required | Nullable | Validation | Description |
-|---|---|:---:|:---:|---|---|
-| `name` | string | ✓ | No | max 100 | Brand name |
-| `slug` | string | ✓ | No | max 255, unique | URL slug |
-| `logoUrl` | string | — | Yes | — | Logo image URL |
-| `description` | string | — | Yes | — | Description |
+Pagination:
+- Paged endpoints return `ApiResponse<PagedResponse<T>>`.
+- `PagedResponse` fields: `items`, `page`, `size`, `totalItems`, `totalPages`, `hasNext`, `hasPrevious`.
+- Standard Spring pageable params are `page`, `size`, `sort`, except `GET /api/v1/admin/reviews`, which uses `page`, `size`, `sort`, and `direction`.
 
-> **Note:** `status` is not accepted on create — defaults to `ACTIVE` server-side.
+Enum parsing:
+- Query-string enums are case-insensitive.
+- JSON-body enums are case-insensitive (`spring.jackson.mapper.accept-case-insensitive-enums=true`).
 
-#### Response (201)
-
-```json
-{
-  "data": {
-    "id": 1,
-    "name": "Nike",
-    "slug": "nike",
-    "logoUrl": "https://cdn.example.com/brands/nike.png",
-    "description": "American sportswear brand",
-    "sortOrder": 0,
-    "status": "ACTIVE",
-    "createdAt": "2026-04-20T08:00:00Z"
-  }
-}
-```
-
-### 4.3 Update Brand
-
-- **Endpoint:** `PATCH /api/v1/admin/brands/{id}`
-- **Auth:** Bearer Token
-- **Allowed roles:** `STAFF`, `ADMIN`, `SUPER_ADMIN`
-
-All fields optional (partial update).
-
-| Field | Type | Nullable | Validation | Description |
-|---|---|:---:|---|---|
-| `name` | string | Yes | max 100 | Brand name |
-| `slug` | string | Yes | max 255 | URL slug |
-| `logoUrl` | string | Yes | — | Logo image URL |
-| `description` | string | Yes | — | Description |
-| `status` | string | Yes | `BrandStatus` enum | `ACTIVE`, `INACTIVE` |
-
-### 4.4 Delete Brand (Soft)
-
-- **Endpoint:** `DELETE /api/v1/admin/brands/{id}`
-- **Auth:** Bearer Token
-- **Allowed roles:** `STAFF`, `ADMIN`, `SUPER_ADMIN`
+Common auth errors:
+- `401 UNAUTHORIZED`
+- `403 FORBIDDEN`
 
 ---
 
-## 5. Product Management
+## 1. Audit logs
 
-### 5.1 List All Products (including drafts)
+Role:
+- `ADMIN`, `SUPER_ADMIN`
 
-- **Endpoint:** `GET /api/v1/admin/products`
-- **Auth:** Bearer Token
-- **Allowed roles:** `ADMIN`, `SUPER_ADMIN`
+### GET `/api/v1/admin/audit-logs`
 
-#### Query Params
+- HTTP: `200 OK`
+- Query params (`AuditLogFilter`):
+  - `entityType`
+  - `entityId`
+  - `action`
+  - `actor`
+  - `fromDate`
+  - `toDate`
+  - `page`, `size`, `sort`
+- Response: `ApiResponse<PagedResponse<AuditLogResponse>>`
+- Default sort: `createdAt DESC`
+- `AuditLogResponse` fields:
+  - `id`, `action`, `entityType`, `entityId`, `actor`, `ipAddress`, `requestId`, `details`, `createdAt`
+- Notes:
+  - Unknown `action` filter values are ignored by the specification instead of returning `400`.
 
-Filters bind to `ProductFilter`. All params are optional.
+### GET `/api/v1/admin/audit-logs/{id}`
 
-| Param | Type | Required | Description |
-|---|---|:---:|---|
-| `keyword` | string | — | Case-insensitive substring match on product name |
-| `categoryId` | long | — | Filter by category (inner join) |
-| `brandId` | long | — | Filter by brand |
-| `status` | string | — | `DRAFT`, `PUBLISHED`, `INACTIVE` |
-| `minPrice` | decimal | — | Min effective price (`coalesce(salePrice, basePrice)`) across variants |
-| `maxPrice` | decimal | — | Max effective price across variants |
-| `featured` | boolean | — | `true` / `false` |
-| `page` | integer | — | Default: `0` |
-| `size` | integer | — | Default: `20`, max: `100` |
-| `sort` | string | — | Default: `createdAt,desc`. Format: `fieldName,direction` (e.g., `sort=name,asc`) |
-
-#### Response (200) — Paginated
-
-```json
-{
-  "data": {
-    "items": [
-      {
-        "id": 1,
-        "name": "Áo thun basic nam",
-        "slug": "ao-thun-basic-nam",
-        "status": "PUBLISHED",
-        "featured": false,
-        "brand": { "id": 1, "name": "Nike" },
-        "createdAt": "2026-04-20T08:00:00Z"
-      }
-    ],
-    "page": 0,
-    "size": 20,
-    "totalItems": 55,
-    "totalPages": 3,
-    "hasNext": true,
-    "hasPrevious": false
-  }
-}
-```
-
-### 5.2 Get Product Detail (Admin — no status filter)
-
-- **Endpoint:** `GET /api/v1/admin/products/{id}`
-- **Auth:** Bearer Token
-- **Allowed roles:** `ADMIN`, `SUPER_ADMIN`
-
-Returns full `ProductDetailResponse` including drafts and all variants/media.
-
-#### Response (200)
-
-```json
-{
-  "data": {
-    "id": 1,
-    "name": "Áo thun basic nam",
-    "slug": "ao-thun-basic-nam",
-    "shortDescription": "Áo thun cotton cơ bản",
-    "description": "Full description...",
-    "status": "DRAFT",
-    "featured": false,
-    "brand": { "id": 1, "name": "Nike", "slug": "nike" },
-    "categories": [ { "id": 1, "name": "Áo", "slug": "ao" } ],
-    "variants": [ "..." ],
-    "media": [ "..." ],
-    "createdAt": "2026-04-20T08:00:00Z",
-    "updatedAt": "2026-04-20T09:00:00Z"
-  }
-}
-```
-
-### 5.3 Create Product
-
-- **Endpoint:** `POST /api/v1/admin/products`
-- **Auth:** Bearer Token
-- **Allowed roles:** `ADMIN`, `SUPER_ADMIN`
-
-#### Request Body
-
-```json
-{
-  "name": "Áo thun basic nam",
-  "slug": "ao-thun-basic-nam",
-  "shortDescription": "Áo thun cotton cơ bản, phù hợp mọi dịp",
-  "description": "Full HTML description...",
-  "brandId": 1,
-  "categoryIds": [1, 2],
-  "status": "DRAFT",
-  "featured": false
-}
-```
-
-| Field | Type | Required | Nullable | Validation | Description |
-|---|---|:---:|:---:|---|---|
-| `name` | string | ✓ | No | max 255 | Product name |
-| `slug` | string | ✓ | No | max 255, unique | URL slug |
-| `shortDescription` | string | — | Yes | max 500 | Short description |
-| `description` | string | — | Yes | — | Full description (HTML) |
-| `brandId` | long | — | Yes | existing brand ID | Brand reference |
-| `categoryIds` | array[long] | — | Yes | existing category IDs | Category references |
-| `status` | string | — | Yes | `ProductStatus` | Default: `DRAFT` |
-| `featured` | boolean | — | Yes | — | Default: `false` |
-
-#### Response (201) — `ProductDetailResponse`
-
-#### Response (ERROR)
-
-| HTTP | Code | When |
-|---|---|---|
-| 409 | `SLUG_ALREADY_EXISTS` | Slug conflict |
-| 404 | `BRAND_NOT_FOUND` | Brand ID not found |
-| 404 | `CATEGORY_NOT_FOUND` | Category ID not found |
-| 422 | `VALIDATION_ERROR` | Validation failed |
-
-### 5.4 Update Product
-
-- **Endpoint:** `PATCH /api/v1/admin/products/{id}`
-- **Auth:** Bearer Token
-- **Allowed roles:** `ADMIN`, `SUPER_ADMIN`
-- All fields optional. `categoryIds` replaces existing assignments when provided.
-
-#### Response (ERROR)
-
-| HTTP | Code | When |
-|---|---|---|
-| 404 | `PRODUCT_NOT_FOUND` | Product not found |
-| 409 | `SLUG_ALREADY_EXISTS` | Slug conflict |
-
-### 5.5 Delete Product (Soft)
-
-- **Endpoint:** `DELETE /api/v1/admin/products/{id}`
-- **Auth:** Bearer Token
-- **Allowed roles:** `ADMIN`, `SUPER_ADMIN`
-
-Returns `200` with `data: null`.
+- HTTP: `200 OK`
+- Response: `ApiResponse<AuditLogResponse>`
+- Errors:
+  - `404 NOT_FOUND` or `404` from the business service when missing
 
 ---
 
-## 6. Variant Management
+## 2. Brands
 
-All variant endpoints live under the product path.
+Role:
+- Read/write: `STAFF`, `ADMIN`, `SUPER_ADMIN`
 
-### 6.1 List Variants for a Product
+### GET `/api/v1/admin/brands`
 
-- **Endpoint:** `GET /api/v1/admin/products/{productId}/variants`
-- **Auth:** Bearer Token
-- **Allowed roles:** `ADMIN`, `SUPER_ADMIN`
+- HTTP: `200 OK`
+- Query params (`BrandFilter`):
+  - `name`
+  - `status`
+  - `page`, `size`, `sort`
+- Response: `ApiResponse<PagedResponse<BrandResponse>>`
+- Default sort: `sortOrder ASC`
+- `BrandResponse` fields:
+  - `id`, `name`, `slug`, `logoUrl`, `description`, `sortOrder`, `status`, `createdAt`
 
-#### Response (200)
+### POST `/api/v1/admin/brands`
 
-```json
-{
-  "data": [
-    {
-      "id": 1,
-      "sku": "ATBN-WH-M",
-      "barcode": "9876543210",
-      "variantName": "Trắng / M",
-      "basePrice": 200000.00,
-      "salePrice": 150000.00,
-      "compareAtPrice": 250000.00,
-      "weightGram": 200,
-      "status": "ACTIVE",
-      "attributes": [
-        { "attributeName": "Color", "value": "Trắng" },
-        { "attributeName": "Size", "value": "M" }
-      ]
-    }
-  ]
-}
-```
+- HTTP: `201 Created`
+- Body (`CreateBrandRequest`):
+  - `name`: required, max 100
+  - `slug`: required, max 255
+  - `logoUrl`: optional
+  - `description`: optional
+- Response: `ApiResponse<BrandResponse>`
+- Errors:
+  - `409 SLUG_ALREADY_EXISTS`
+  - `422 VALIDATION_ERROR`
 
-### 6.2 Create Variant
+### PATCH `/api/v1/admin/brands/{id}`
 
-- **Endpoint:** `POST /api/v1/admin/products/{productId}/variants`
-- **Auth:** Bearer Token
-- **Allowed roles:** `ADMIN`, `SUPER_ADMIN`
+- HTTP: `200 OK`
+- Body (`UpdateBrandRequest`, all fields optional):
+  - `name`, `slug`, `logoUrl`, `description`, `status`
+- Response: `ApiResponse<BrandResponse>`
+- Errors:
+  - `404 BRAND_NOT_FOUND`
+  - `409 SLUG_ALREADY_EXISTS`
+  - `422 VALIDATION_ERROR`
 
-#### Request Body
+### DELETE `/api/v1/admin/brands/{id}`
 
-```json
-{
-  "sku": "ATBN-WH-M",
-  "barcode": "9876543210",
-  "variantName": "Trắng / M",
-  "basePrice": 200000.00,
-  "salePrice": 150000.00,
-  "compareAtPrice": 250000.00,
-  "weightGram": 200,
-  "status": "ACTIVE",
-  "attributes": [
-    { "attributeName": "Color", "value": "Trắng" },
-    { "attributeName": "Size", "value": "M" }
-  ]
-}
-```
-
-| Field | Type | Required | Nullable | Validation | Description |
-|---|---|:---:|:---:|---|---|
-| `sku` | string | ✓ | No | max 100, unique | Stock keeping unit |
-| `barcode` | string | — | Yes | max 100 | Barcode |
-| `variantName` | string | ✓ | No | max 255 | Display name |
-| `basePrice` | decimal | ✓ | No | > 0 | Original price |
-| `salePrice` | decimal | — | Yes | > 0 | Sale price (if on sale) |
-| `compareAtPrice` | decimal | — | Yes | > 0 | Strikethrough price |
-| `weightGram` | integer | — | Yes | — | Weight in grams |
-| `status` | string | — | Yes | `ProductVariantStatus` | Default: `ACTIVE` |
-| `attributes` | array | — | Yes | — | Attribute key-value pairs |
-| `attributes[].attributeName` | string | ✓ | No | — | e.g., "Color", "Size" |
-| `attributes[].value` | string | ✓ | No | — | e.g., "Trắng", "M" |
-
-#### Response (ERROR)
-
-| HTTP | Code | When |
-|---|---|---|
-| 409 | `SKU_ALREADY_EXISTS` | SKU already in use |
-| 404 | `PRODUCT_NOT_FOUND` | Product not found |
-| 422 | `VALIDATION_ERROR` | Validation failed |
-
-### 6.3 Update Variant
-
-- **Endpoint:** `PATCH /api/v1/admin/products/{productId}/variants/{variantId}`
-- **Auth:** Bearer Token
-- **Allowed roles:** `ADMIN`, `SUPER_ADMIN`
-- All fields optional. `attributes` replaces existing when provided.
-
-### 6.4 Delete Variant (Soft)
-
-- **Endpoint:** `DELETE /api/v1/admin/products/{productId}/variants/{variantId}`
-- **Auth:** Bearer Token
-- **Allowed roles:** `ADMIN`, `SUPER_ADMIN`
+- HTTP: `200 OK`
+- Response: `ApiResponse<Void>` with `data = null`
+- Behavior: soft-delete
+- Errors:
+  - `404 BRAND_NOT_FOUND`
 
 ---
 
-## 7. Inventory & Warehouse
+## 3. Categories
 
-### 7.1 List Active Warehouses
+Role:
+- Write-only admin surface: `STAFF`, `ADMIN`, `SUPER_ADMIN`
 
-- **Endpoint:** `GET /api/v1/admin/warehouses`
-- **Auth:** Bearer Token
-- **Allowed roles:** `STAFF`, `ADMIN`, `SUPER_ADMIN`
+There is no admin category list or admin category detail endpoint in the current codebase. Read access is public via `/api/v1/categories`.
 
-#### Response (200)
+### POST `/api/v1/admin/categories`
 
-```json
-{
-  "data": [
-    {
-      "id": 1,
-      "name": "Kho HCM",
-      "code": "WHM-001",
-      "location": "123 Đường ABC, Q.1, TP.HCM",
-      "status": "ACTIVE"
-    }
-  ]
-}
-```
+- HTTP: `201 Created`
+- Body (`CreateCategoryRequest`):
+  - `parentId`: optional
+  - `name`: required, max 100
+  - `slug`: required, max 255
+  - `description`: optional
+  - `imageUrl`: optional
+  - `sortOrder`: optional
+- Response: `ApiResponse<CategoryResponse>`
+- `CategoryResponse` fields:
+  - `id`, `parentId`, `name`, `slug`, `description`, `imageUrl`, `status`, `sortOrder`, `createdAt`
+- Errors:
+  - `404 CATEGORY_NOT_FOUND` if `parentId` does not exist
+  - `409 SLUG_ALREADY_EXISTS`
+  - `422 VALIDATION_ERROR`
 
-### 7.2 Get Warehouse by ID
+### PATCH `/api/v1/admin/categories/{id}`
 
-- **Endpoint:** `GET /api/v1/admin/warehouses/{id}`
-- **Auth:** Bearer Token
-- **Allowed roles:** `STAFF`, `ADMIN`, `SUPER_ADMIN`
+- HTTP: `200 OK`
+- Body (`UpdateCategoryRequest`, all fields optional):
+  - `parentId`, `name`, `slug`, `description`, `imageUrl`, `status`, `sortOrder`
+- Response: `ApiResponse<CategoryResponse>`
+- Errors:
+  - `404 CATEGORY_NOT_FOUND`
+  - `409 SLUG_ALREADY_EXISTS`
+  - `400 BAD_REQUEST` if `parentId == id`
+  - `422 VALIDATION_ERROR`
 
-### 7.3 Create Warehouse
+### DELETE `/api/v1/admin/categories/{id}`
 
-- **Endpoint:** `POST /api/v1/admin/warehouses`
-- **Auth:** Bearer Token
-- **Allowed roles:** `ADMIN`, `SUPER_ADMIN`
-
-#### Request Body
-
-```json
-{
-  "name": "Kho chính Hà Nội",
-  "code": "KHO-HN-01",
-  "location": "123 Đường XYZ, Hà Nội"
-}
-```
-
-| Field | Type | Required | Nullable | Validation | Description |
-|---|---|:---:|:---:|---|---|
-| `name` | string | ✓ | No | max 100 | Warehouse name |
-| `code` | string | ✓ | No | max 50, pattern `[A-Za-z0-9_-]`, unique | Warehouse code |
-| `location` | string | — | Yes | max 255 | Physical address |
-
-### 7.4 Update Warehouse
-
-- **Endpoint:** `PATCH /api/v1/admin/warehouses/{id}`
-- **Auth:** Bearer Token
-- **Allowed roles:** `ADMIN`, `SUPER_ADMIN`
-
-All fields optional.
-
-| Field | Type | Nullable | Validation | Description |
-|---|---|:---:|---|---|
-| `name` | string | Yes | max 100 | Warehouse name |
-| `location` | string | Yes | max 255 | Physical address |
-| `status` | string | Yes | `ACTIVE`, `INACTIVE` | Warehouse status |
-
-### 7.5 Delete Warehouse (Soft)
-
-- **Endpoint:** `DELETE /api/v1/admin/warehouses/{id}`
-- **Auth:** Bearer Token
-- **Allowed roles:** `ADMIN`, `SUPER_ADMIN`
-
-### 7.6 Get Inventory by Variant
-
-- **Endpoint:** `GET /api/v1/admin/inventories/variant/{variantId}`
-- **Auth:** Bearer Token
-- **Allowed roles:** `STAFF`, `ADMIN`, `SUPER_ADMIN`
-
-Returns stock levels across all warehouses for the given variant.
-
-#### Response (200)
-
-```json
-{
-  "data": [
-    {
-      "id": 1,
-      "variantId": 1,
-      "variantName": "Trắng / M",
-      "sku": "ATBN-WH-M",
-      "warehouseId": 1,
-      "warehouseName": "Kho HCM",
-      "onHand": 100,
-      "reserved": 5,
-      "available": 95,
-      "updatedAt": "2026-04-20T08:00:00Z"
-    }
-  ]
-}
-```
-
-| Field | Type | Description |
-|---|---|---|
-| `onHand` | integer | Physical stock |
-| `reserved` | integer | Stock held for pending orders |
-| `available` | integer | `onHand - reserved` |
-
-### 7.7 Get Inventory by Warehouse
-
-- **Endpoint:** `GET /api/v1/admin/inventories/warehouse/{warehouseId}`
-- **Auth:** Bearer Token
-- **Allowed roles:** `STAFF`, `ADMIN`, `SUPER_ADMIN`
-
-### 7.8 Get Inventory Detail (Variant + Warehouse)
-
-- **Endpoint:** `GET /api/v1/admin/inventories/variant/{variantId}/warehouse/{warehouseId}`
-- **Auth:** Bearer Token
-- **Allowed roles:** `STAFF`, `ADMIN`, `SUPER_ADMIN`
-
-### 7.9 Get Stock Movement History
-
-- **Endpoint:** `GET /api/v1/admin/inventories/movements`
-- **Auth:** Bearer Token
-- **Allowed roles:** `STAFF`, `ADMIN`, `SUPER_ADMIN`
-
-#### Query Params
-
-Filters are bound as individual `@RequestParam` (not a DTO object). All optional.
-
-| Param | Type | Required | Description |
-|---|---|:---:|---|
-| `variantId` | long | — | Filter by variant |
-| `warehouseId` | long | — | Filter by warehouse |
-| `movementType` | string | — | `IMPORT`, `EXPORT`, `RESERVE`, `RELEASE`, `ADJUST`, `RETURN` |
-| `page` | integer | — | Default: `0` |
-| `size` | integer | — | Default: `20` |
-| `sort` | string | — | Spring Pageable format, e.g., `sort=createdAt,desc` |
-
-#### Response (200) — Paginated `StockMovementResponse`
-
-### 7.10 Adjust Stock
-
-- **Endpoint:** `POST /api/v1/admin/inventories/adjust`
-- **Auth:** Bearer Token
-- **Allowed roles:** `ADMIN`, `SUPER_ADMIN`
-
-#### Request Body
-
-```json
-{
-  "variantId": 1,
-  "warehouseId": 1,
-  "quantity": 50,
-  "movementType": "IMPORT",
-  "note": "Nhập hàng mới từ nhà cung cấp ABC"
-}
-```
-
-| Field | Type | Required | Nullable | Validation | Description |
-|---|---|:---:|:---:|---|---|
-| `variantId` | long | ✓ | No | — | Target variant |
-| `warehouseId` | long | ✓ | No | — | Target warehouse |
-| `quantity` | integer | ✓ | No | > 0 | Quantity to adjust |
-| `movementType` | string | ✓ | No | `IMPORT`, `EXPORT`, `ADJUST`, `RETURN` | Type of movement |
-| `note` | string | — | Yes | max 500 | Admin note |
-
-### 7.11 Manually Reserve Stock
-
-- **Endpoint:** `POST /api/v1/admin/inventories/reserve`
-- **Auth:** Bearer Token
-- **Allowed roles:** `ADMIN`, `SUPER_ADMIN`
-
-#### Request Body
-
-```json
-{
-  "variantId": 1,
-  "warehouseId": 1,
-  "quantity": 5,
-  "referenceType": "ORDER",
-  "referenceId": "ORD20260420001",
-  "expiresAt": "2026-04-21T00:00:00"
-}
-```
-
-| Field | Type | Required | Nullable | Validation | Description |
-|---|---|:---:|:---:|---|---|
-| `variantId` | long | ✓ | No | — | Target variant |
-| `warehouseId` | long | ✓ | No | — | Target warehouse |
-| `quantity` | integer | ✓ | No | > 0 | Quantity to reserve |
-| `referenceType` | string | — | Yes | — | e.g., `ORDER` |
-| `referenceId` | string | — | Yes | — | e.g., order code |
-| `expiresAt` | datetime | — | Yes | ISO-8601 | Reservation expiry |
-
-### 7.12 Release Reserved Stock
-
-- **Endpoint:** `POST /api/v1/admin/inventories/release`
-- **Auth:** Bearer Token
-- **Allowed roles:** `ADMIN`, `SUPER_ADMIN`
-
-#### Query Params
-
-| Param | Type | Required | Description |
-|---|---|:---:|---|
-| `referenceType` | string | ✓ | e.g., `ORDER` |
-| `referenceId` | string | ✓ | e.g., `ORD20260420001` |
+- HTTP: `200 OK`
+- Response: `ApiResponse<Void>` with `data = null`
+- Behavior: soft-delete
+- Errors:
+  - `404 CATEGORY_NOT_FOUND`
 
 ---
 
-## 8. Order Management
+## 4. Products and variants
 
-### 8.1 List All Orders
+Role:
+- `ADMIN`, `SUPER_ADMIN`
 
-- **Endpoint:** `GET /api/v1/admin/orders`
-- **Auth:** Bearer Token
-- **Allowed roles:** `STAFF`, `ADMIN`, `SUPER_ADMIN`
+### GET `/api/v1/admin/products`
 
-#### Query Params (OrderAdminFilter)
+- HTTP: `200 OK`
+- Query params (`ProductFilter`):
+  - `keyword`
+  - `categoryId`
+  - `brandId`
+  - `status`
+  - `minPrice`
+  - `maxPrice`
+  - `featured`
+  - `page`, `size`, `sort`
+- Response: `ApiResponse<PagedResponse<ProductListItemResponse>>`
+- Sorting:
+  - The controller declares a pageable default, but clients should send an explicit `sort` if they need predictable ordering.
 
-Filters bind to `OrderAdminFilter`. All params are optional.
+### GET `/api/v1/admin/products/{id}`
 
-| Param | Type | Required | Description |
-|---|---|:---:|---|
-| `customerId` | long | — | Filter by customer ID |
-| `status` | string | — | `OrderStatus` enum value (e.g., `PENDING`, `CONFIRMED`, `PROCESSING`, `SHIPPED`, `DELIVERED`, `COMPLETED`, `CANCELLED`) |
-| `paymentStatus` | string | — | `PaymentStatus` enum value (e.g., `PENDING`, `PAID`, `FAILED`) |
-| `page` | integer | — | Default: `0` |
-| `size` | integer | — | Default: `20` |
-| `sort` | string | — | Spring Pageable format, e.g., `sort=createdAt,desc` |
+- HTTP: `200 OK`
+- Response: `ApiResponse<ProductDetailResponse>`
+- Errors:
+  - `404 PRODUCT_NOT_FOUND`
 
-#### Response (200) — Paginated `AdminOrderListItemResponse`
+### POST `/api/v1/admin/products`
 
-```json
-{
-  "data": {
-    "items": [
-      {
-        "id": 1,
-        "orderCode": "ORD20260420001",
-        "customerId": 5,
-        "status": "CONFIRMED",
-        "paymentStatus": "PAID",
-        "paymentMethod": "COD",
-        "totalAmount": 350000.00,
-        "createdAt": "2026-04-20T08:00:00Z"
-      }
-    ],
-    "page": 0,
-    "size": 20,
-    "totalItems": 200,
-    "totalPages": 10,
-    "hasNext": true,
-    "hasPrevious": false
-  }
-}
-```
+- HTTP: `200 OK`
+- Body (`CreateProductRequest`):
+  - `name`: required, max 255
+  - `slug`: required, max 255
+  - `shortDescription`: optional, max 500
+  - `description`: optional
+  - `brandId`: optional
+  - `categoryIds`: optional list
+  - `status`: optional, defaults to `DRAFT`
+  - `featured`: optional, defaults to `false`
+- Response: `ApiResponse<ProductDetailResponse>`
+- Errors:
+  - `409 SLUG_ALREADY_EXISTS`
+  - `404 BRAND_NOT_FOUND`
+  - `422 VALIDATION_ERROR`
+- Notes:
+  - Unknown `categoryIds` are silently ignored by the current service. They do not produce `404`.
 
-### 8.2 Get Order Detail by ID
+### PATCH `/api/v1/admin/products/{id}`
 
-- **Endpoint:** `GET /api/v1/admin/orders/{id}`
-- **Auth:** Bearer Token
-- **Allowed roles:** `STAFF`, `ADMIN`, `SUPER_ADMIN`
-- No ownership check.
+- HTTP: `200 OK`
+- Body (`UpdateProductRequest`, all fields optional):
+  - `name`, `slug`, `shortDescription`, `description`, `brandId`, `categoryIds`, `status`, `featured`
+- Response: `ApiResponse<ProductDetailResponse>`
+- Errors:
+  - `404 PRODUCT_NOT_FOUND`
+  - `404 BRAND_NOT_FOUND`
+  - `409 SLUG_ALREADY_EXISTS`
+  - `422 VALIDATION_ERROR`
+- Notes:
+  - When `categoryIds` is present, it replaces the category set.
+  - Unknown `categoryIds` are silently ignored.
 
-#### Response (200) — `OrderResponse`
+### DELETE `/api/v1/admin/products/{id}`
 
-```json
-{
-  "data": {
-    "id": 1,
-    "orderCode": "ORD20260420001",
-    "customerId": 5,
-    "status": "CONFIRMED",
-    "paymentMethod": "COD",
-    "paymentStatus": "PENDING",
-    "receiverName": "Nguyen Van Loc",
-    "receiverPhone": "0912345678",
-    "shippingStreet": "123 Nguyen Hue",
-    "shippingWard": "Phuong Ben Nghe",
-    "shippingDistrict": "Quan 1",
-    "shippingCity": "TP. Ho Chi Minh",
-    "shippingPostalCode": "700000",
-    "subTotal": 400000.00,
-    "discountAmount": 50000.00,
-    "shippingFee": 0.00,
-    "totalAmount": 350000.00,
-    "voucherCode": "SALE50K",
-    "customerNote": "Giao giờ hành chính",
-    "items": [
-      {
-        "id": 1,
-        "variantId": 1,
-        "productName": "Áo thun basic nam",
-        "variantName": "Trắng / M",
-        "sku": "ATBN-WH-M",
-        "unitPrice": 200000.00,
-        "quantity": 2,
-        "lineTotal": 400000.00,
-        "discountAmount": 50000.00
-      }
-    ],
-    "createdAt": "2026-04-20T08:00:00Z"
-  }
-}
-```
+- HTTP: `200 OK`
+- Response: `ApiResponse<Void>` with `data = null`
+- Behavior: soft-delete
+- Errors:
+  - `404 PRODUCT_NOT_FOUND`
 
-### 8.3 Get Order by Code
+### GET `/api/v1/admin/products/{productId}/variants`
 
-- **Endpoint:** `GET /api/v1/admin/orders/code/{orderCode}`
-- **Auth:** Bearer Token
-- **Allowed roles:** `STAFF`, `ADMIN`, `SUPER_ADMIN`
-- **Path params:** `orderCode` (string, e.g., `ORD20260420001`)
+- HTTP: `200 OK`
+- Response: `ApiResponse<List<VariantResponse>>`
+- Notes:
+  - Returns an empty list when no variants are found.
+  - The current service does not validate that `productId` exists before listing.
 
-### 8.4 Confirm Order
+### POST `/api/v1/admin/products/{productId}/variants`
 
-- **Endpoint:** `POST /api/v1/admin/orders/{id}/confirm`
-- **Auth:** Bearer Token
-- **Allowed roles:** `STAFF`, `ADMIN`, `SUPER_ADMIN`
-- **Transition:** `PENDING` / `AWAITING_PAYMENT` → `CONFIRMED`
+- HTTP: `200 OK`
+- Body (`CreateVariantRequest`):
+  - `sku`: required, max 100
+  - `barcode`: optional, max 100
+  - `variantName`: required, max 255
+  - `basePrice`: required, positive
+  - `salePrice`: optional, positive
+  - `compareAtPrice`: optional, positive
+  - `weightGram`: optional
+  - `status`: optional, defaults to `ACTIVE`
+  - `attributes`: optional list of `{ attributeName, value }`, both required and max 100 when present
+- Response: `ApiResponse<VariantResponse>`
+- Errors:
+  - `404 PRODUCT_NOT_FOUND`
+  - `409 SKU_ALREADY_EXISTS`
+  - `422 VALIDATION_ERROR`
 
-Returns `200` with updated `OrderResponse`.
+### PATCH `/api/v1/admin/products/{productId}/variants/{variantId}`
 
-#### Response (ERROR)
+- HTTP: `200 OK`
+- Body (`UpdateVariantRequest`, all fields optional):
+  - `sku`, `barcode`, `variantName`, `basePrice`, `salePrice`, `compareAtPrice`, `weightGram`, `status`, `attributes`
+- Response: `ApiResponse<VariantResponse>`
+- Errors:
+  - `404 PRODUCT_VARIANT_NOT_FOUND`
+  - `409 SKU_ALREADY_EXISTS`
+  - `422 VALIDATION_ERROR`
 
-| HTTP | Code | When |
-|---|---|---|
-| 404 | `ORDER_NOT_FOUND` | Order not found |
-| 422 | `ORDER_STATUS_INVALID` | Invalid transition |
+### DELETE `/api/v1/admin/products/{productId}/variants/{variantId}`
 
-### 8.5 Mark as Processing
+- HTTP: `200 OK`
+- Response: `ApiResponse<Void>` with `data = null`
+- Behavior: soft-delete
+- Errors:
+  - `404 PRODUCT_VARIANT_NOT_FOUND`
 
-- **Endpoint:** `POST /api/v1/admin/orders/{id}/process`
-- **Auth:** Bearer Token
-- **Allowed roles:** `STAFF`, `ADMIN`, `SUPER_ADMIN`
-- **Transition:** `CONFIRMED` → `PROCESSING`
-
-### 8.6 Mark as Delivered
-
-- **Endpoint:** `POST /api/v1/admin/orders/{id}/deliver`
-- **Auth:** Bearer Token
-- **Allowed roles:** `STAFF`, `ADMIN`, `SUPER_ADMIN`
-- **Transition:** `SHIPPED` → `DELIVERED`
-- **Note:** `SHIPPED` status is set automatically when a shipment is created.
-
-### 8.7 Complete Order
-
-- **Endpoint:** `POST /api/v1/admin/orders/{id}/complete`
-- **Auth:** Bearer Token
-- **Allowed roles:** `STAFF`, `ADMIN`, `SUPER_ADMIN`
-- **Transition:** `DELIVERED` → `COMPLETED`
-- **Note:** Commits reserved stock.
-
-### 8.8 Cancel Order (Admin)
-
-- **Endpoint:** `POST /api/v1/admin/orders/{id}/cancel`
-- **Auth:** Bearer Token
-- **Allowed roles:** `ADMIN`, `SUPER_ADMIN` ← more restrictive than class-level
-- **Cancellable from:** `PENDING`, `AWAITING_PAYMENT`, `CONFIRMED`
-- **Effect:** Releases reserved stock.
-
-#### Response (ERROR)
-
-| HTTP | Code | When |
-|---|---|---|
-| 422 | `ORDER_CANNOT_CANCEL` | Status does not allow cancellation |
-| 403 | `FORBIDDEN` | STAFF role insufficient |
+Shared product DTO fields:
+- `ProductListItemResponse`: `id`, `name`, `slug`, `shortDescription`, `thumbnailUrl`, `minPrice`, `maxPrice`, `status`, `featured`, `brandName`, `categoryNames`, `createdAt`
+- `ProductDetailResponse`: `id`, `name`, `slug`, `shortDescription`, `description`, `status`, `featured`, `brand`, `categories`, `variants`, `media`, `createdAt`, `updatedAt`
+- `VariantResponse`: `id`, `sku`, `barcode`, `variantName`, `basePrice`, `salePrice`, `compareAtPrice`, `weightGram`, `status`, `attributes`
+- `AttributeResponse`: `name`, `value`
+- `MediaResponse`: `id`, `mediaUrl`, `mediaType`, `sortOrder`, `primary`, `variantId`
 
 ---
 
-## 9. Payment Management
+## 5. Inventory
 
-> **Auth note:** `AdminPaymentController` has class-level `@PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'STAFF')")` and `@SecurityRequirement(name = "bearerAuth")`. All endpoints require `STAFF` or higher — no per-method overrides.
+Role:
+- Read: `STAFF`, `ADMIN`, `SUPER_ADMIN`
+- Mutations: `ADMIN`, `SUPER_ADMIN`
 
-### 9.1 List All Payments
+### GET `/api/v1/admin/inventories`
 
-- **Endpoint:** `GET /api/v1/admin/payments`
-- **Auth:** Bearer Token
-- **Allowed roles:** `STAFF`, `ADMIN`, `SUPER_ADMIN` (path-level guard)
+- HTTP: `200 OK`
+- Query params (`InventoryFilter`):
+  - `variantId`
+  - `warehouseId`
+  - `productId`
+  - `sku`
+  - `keyword`
+  - `variantStatus`
+  - `outOfStock`
+  - `lowStock`
+  - `lowStockThreshold`
+  - `page`, `size`, `sort`
+- Response: `ApiResponse<PagedResponse<InventoryResponse>>`
+- Default sort: `updatedAt DESC`
+- `InventoryResponse` fields:
+  - `id`, `variantId`, `variantName`, `sku`, `warehouseId`, `warehouseName`, `onHand`, `reserved`, `available`, `updatedAt`
+- Notes:
+  - `variantStatus` is a string filter. Invalid values are ignored by the specification.
+  - `lowStockThreshold` defaults to `5` when `lowStock=true` and the threshold is omitted.
 
-#### Query Params (PaymentFilter)
+### GET `/api/v1/admin/inventories/variant/{variantId}`
 
-All params are optional.
+- HTTP: `200 OK`
+- Response: `ApiResponse<List<InventoryResponse>>`
+- Notes:
+  - Returns an empty list when nothing matches.
+  - The service does not validate that `variantId` exists first.
 
-| Param | Type | Required | Description |
-|---|---|:---:|---|
-| `method` | string | — | `COD` or `ONLINE` (case-insensitive) |
-| `status` | string | — | `PENDING`, `INITIATED`, `PAID`, `FAILED`, `REFUNDED` |
-| `orderCode` | string | — | Partial, case-insensitive match on order code |
-| `dateFrom` | date | — | Format: `yyyy-MM-dd` — filters on `createdAt` |
-| `dateTo` | date | — | Format: `yyyy-MM-dd` — filters on `createdAt` |
-| `page` | integer | — | Default: `0` |
-| `size` | integer | — | Default: `20` (`@PageableDefault`) |
-| `sort` | string | — | Spring Pageable format, e.g., `sort=createdAt,desc` |
+### GET `/api/v1/admin/inventories/warehouse/{warehouseId}`
 
-#### Response (200) — Paginated `PaymentResponse`
+- HTTP: `200 OK`
+- Response: `ApiResponse<List<InventoryResponse>>`
+- Errors:
+  - `404 WAREHOUSE_NOT_FOUND`
 
-### 9.2 Get Payment by ID
+### GET `/api/v1/admin/inventories/variant/{variantId}/warehouse/{warehouseId}`
 
-- **Endpoint:** `GET /api/v1/admin/payments/{id}`
-- **Auth:** Bearer Token
+- HTTP: `200 OK`
+- Response: `ApiResponse<InventoryResponse>`
+- Errors:
+  - `404 INVENTORY_NOT_FOUND`
 
-### 9.3 Get Payment by Code
+### GET `/api/v1/admin/inventories/movements`
 
-- **Endpoint:** `GET /api/v1/admin/payments/code/{code}`
-- **Auth:** Bearer Token
+- HTTP: `200 OK`
+- Query params:
+  - `variantId`
+  - `warehouseId`
+  - `movementType`
+  - `page`, `size`, `sort`
+- Response: `ApiResponse<PagedResponse<StockMovementResponse>>`
+- Repository ordering: `createdAt DESC`
+- `StockMovementResponse` fields:
+  - `id`, `variantId`, `variantName`, `sku`, `warehouseId`, `warehouseName`, `movementType`, `quantity`, `referenceType`, `referenceId`, `note`, `beforeOnHand`, `beforeReserved`, `beforeAvailable`, `afterOnHand`, `afterReserved`, `afterAvailable`, `createdBy`, `createdAt`
 
-### 9.4 Get Payment by Order ID
+### POST `/api/v1/admin/inventories/adjust`
 
-- **Endpoint:** `GET /api/v1/admin/payments/order/{orderId}`
-- **Auth:** Bearer Token
+- Role: `ADMIN`, `SUPER_ADMIN`
+- HTTP: `200 OK`
+- Body (`AdjustStockRequest`):
+  - `variantId`: required
+  - `warehouseId`: required
+  - `quantity`: required, positive
+  - `movementType`: required, `IMPORT | EXPORT | RESERVE | RELEASE | ADJUST | RETURN`
+  - `note`: optional, max 500
+- Response: `ApiResponse<StockMovementResponse>`
+- Errors:
+  - `404 PRODUCT_VARIANT_NOT_FOUND`
+  - `404 WAREHOUSE_NOT_FOUND`
+  - `404 INVENTORY_NOT_FOUND`
+  - `422 INVENTORY_NOT_ENOUGH`
+  - `422 STOCK_RESERVATION_FAILED`
+  - `422 VALIDATION_ERROR`
+- Notes:
+  - `movementType=ADJUST` is accepted, but the DTO only allows positive `quantity`, so this endpoint cannot perform negative manual corrections through the request contract.
+  - `movementType=RESERVE` or `RELEASE` changes reserved counts directly and does not create/remove `InventoryReservation` rows. Dedicated `/reserve` and `/release` endpoints also exist.
 
-### 9.5 Complete COD Payment
+### POST `/api/v1/admin/inventories/reserve`
 
-- **Endpoint:** `POST /api/v1/admin/payments/order/{orderId}/complete`
-- **Auth:** Bearer Token
-- **Description:** Marks COD payment as PAID and syncs `order.paymentStatus`. Call when delivery agent confirms cash collected. Idempotent.
+- Role: `ADMIN`, `SUPER_ADMIN`
+- HTTP: `200 OK`
+- Body (`ReserveStockRequest`):
+  - `variantId`: required
+  - `warehouseId`: required
+  - `quantity`: required, positive
+  - `referenceType`: optional string
+  - `referenceId`: optional string
+  - `expiresAt`: optional timestamp
+- Response: `ApiResponse<InventoryReservation>`
+- Stable scalar fields on `InventoryReservation`:
+  - `id`, `referenceType`, `referenceId`, `quantity`, `status`, `expiresAt`, `createdAt`, `createdBy`, `updatedAt`, `updatedBy`
+- Errors:
+  - `404 PRODUCT_VARIANT_NOT_FOUND`
+  - `404 WAREHOUSE_NOT_FOUND`
+  - `404 INVENTORY_NOT_FOUND`
+  - `422 INVENTORY_NOT_ENOUGH`
+  - `422 STOCK_RESERVATION_FAILED`
+  - `422 VALIDATION_ERROR`
+- Notes:
+  - The controller returns the JPA entity directly instead of a dedicated DTO. Nested `variant` and `warehouse` serialization should not be treated as a stable public contract.
 
-#### Response (200) — `PaymentResponse`
+### POST `/api/v1/admin/inventories/release`
 
-```json
-{
-  "data": {
-    "id": 1,
-    "orderId": 1,
-    "orderCode": "ORD20260420001",
-    "paymentCode": "PAY20260420001",
-    "method": "COD",
-    "status": "PAID",
-    "amount": 350000.00,
-    "paidAt": "2026-04-20T10:00:00Z",
-    "transactions": [ "..." ],
-    "createdAt": "2026-04-20T08:00:00Z"
-  }
-}
-```
-
-### 9.6 Get Transaction Audit Trail
-
-- **Endpoint:** `GET /api/v1/admin/payments/{id}/transactions`
-- **Auth:** Bearer Token
-
-Returns `List<TransactionResponse>` (non-paginated) for a payment.
-
----
-
-## 10. Shipment Management
-
-### 10.1 Create Shipment
-
-- **Endpoint:** `POST /api/v1/admin/shipments`
-- **Auth:** Bearer Token
-- **Allowed roles:** `STAFF`, `ADMIN`, `SUPER_ADMIN`
-- **Pre-condition:** Order must be in `PROCESSING` status.
-- **Side effect:** Transitions order to `SHIPPED`.
-
-#### Request Body
-
-```json
-{
-  "orderId": 1,
-  "carrier": "GHTK",
-  "trackingNumber": "GHTK123456789",
-  "estimatedDeliveryDate": "2026-04-25",
-  "shippingFee": 30000.00,
-  "note": "Giao trong giờ hành chính"
-}
-```
-
-| Field | Type | Required | Nullable | Validation | Description |
-|---|---|:---:|:---:|---|---|
-| `orderId` | long | ✓ | No | order must be in PROCESSING | Target order |
-| `carrier` | string | ✓ | No | max 100 | Carrier name (e.g., GHTK, GHN, VNPOST, J&T) |
-| `trackingNumber` | string | — | Yes | max 200 | Can be added later via update |
-| `estimatedDeliveryDate` | date | — | Yes | `yyyy-MM-dd` | ETA |
-| `shippingFee` | decimal | — | Yes | ≥ 0 | Shipping cost |
-| `note` | string | — | Yes | max 500 | Internal note |
-
-#### Response (201) — `ShipmentResponse`
-
-### 10.2 Get Shipment by ID
-
-- **Endpoint:** `GET /api/v1/admin/shipments/{id}`
-- **Auth:** Bearer Token
-- **Allowed roles:** `STAFF`, `ADMIN`, `SUPER_ADMIN`
-
-### 10.3 Get Shipment by Order ID
-
-- **Endpoint:** `GET /api/v1/admin/shipments/order/{orderId}`
-- **Auth:** Bearer Token
-- **Allowed roles:** `STAFF`, `ADMIN`, `SUPER_ADMIN`
-
-### 10.4 List Shipments
-
-- **Endpoint:** `GET /api/v1/admin/shipments`
-- **Auth:** Bearer Token
-- **Allowed roles:** `STAFF`, `ADMIN`, `SUPER_ADMIN`
-
-#### Query Params
-
-Filters bind to `ShipmentFilter`. All params are optional. Pagination via Spring Pageable (`@PageableDefault(size=20, sort="createdAt")`).
-
-| Param | Type | Required | Description |
-|---|---|:---:|---|
-| `orderId` | long | — | Filter by order ID |
-| `orderCode` | string | — | Partial, case-insensitive match on order code |
-| `carrier` | string | — | Partial, case-insensitive match on carrier |
-| `status` | string | — | `ShipmentStatus` enum (e.g., `PENDING`, `IN_TRANSIT`, `OUT_FOR_DELIVERY`, `DELIVERED`, `FAILED`, `RETURNED`) |
-| `dateFrom` | date | — | Format: `yyyy-MM-dd` — filters on `createdAt` |
-| `dateTo` | date | — | Format: `yyyy-MM-dd` — filters on `createdAt` |
-| `page` | integer | — | Default: `0` |
-| `size` | integer | — | Default: `20` |
-| `sort` | string | — | Spring Pageable format, e.g., `sort=createdAt,desc` |
-
-### 10.5 Update Shipment Details
-
-- **Endpoint:** `PATCH /api/v1/admin/shipments/{id}`
-- **Auth:** Bearer Token
-- **Allowed roles:** `STAFF`, `ADMIN`, `SUPER_ADMIN`
-
-All fields optional.
-
-| Field | Type | Nullable | Validation | Description |
-|---|---|:---:|---|---|
-| `carrier` | string | Yes | max 100 | Carrier name |
-| `trackingNumber` | string | Yes | max 200 | Tracking number |
-| `estimatedDeliveryDate` | date | Yes | `yyyy-MM-dd` | ETA |
-| `shippingFee` | decimal | Yes | ≥ 0 | Shipping cost |
-| `note` | string | Yes | max 500 | Internal note |
-
-### 10.6 Update Shipment Status
-
-- **Endpoint:** `PATCH /api/v1/admin/shipments/{id}/status`
-- **Auth:** Bearer Token
-- **Allowed roles:** `STAFF`, `ADMIN`, `SUPER_ADMIN`
-- **Description:** Advances shipment status and records a tracking event. Validates state machine. On `DELIVERED`, transitions order to `DELIVERED`.
-
-#### Request Body
-
-```json
-{
-  "status": "IN_TRANSIT",
-  "location": "Bưu cục Q.1, TP.HCM",
-  "description": "Kiện hàng đã được nhận tại bưu cục",
-  "eventTime": "2026-04-20T10:00:00"
-}
-```
-
-| Field | Type | Required | Nullable | Validation | Description |
-|---|---|:---:|:---:|---|---|
-| `status` | string | ✓ | No | valid `ShipmentStatus` forward transition | New status |
-| `location` | string | — | Yes | max 255 | Physical location of event |
-| `description` | string | ✓ | No | max 500 | Shown on tracking timeline |
-| `eventTime` | datetime | — | Yes | ISO-8601 | Defaults to now if omitted |
-
-**Status transitions:**
-```
-PENDING → IN_TRANSIT → OUT_FOR_DELIVERY → DELIVERED (terminal)
-         IN_TRANSIT → FAILED
-         OUT_FOR_DELIVERY → FAILED
-         FAILED → RETURNED (terminal)
-```
-
-#### Response (ERROR)
-
-| HTTP | Code | When |
-|---|---|---|
-| 422 | `SHIPMENT_STATUS_INVALID` | Invalid transition |
+- Role: `ADMIN`, `SUPER_ADMIN`
+- HTTP: `200 OK`
+- Query params:
+  - `referenceType`: required
+  - `referenceId`: required
+- Response: `ApiResponse<Void>` with `data = null`
+- Behavior:
+  - Releasing a reference with no pending reservations is a no-op.
 
 ---
 
-## 11. Invoice Management
+## 6. Warehouses
 
-### 11.1 Generate Invoice
+Role:
+- Read: `STAFF`, `ADMIN`, `SUPER_ADMIN`
+- Mutations: `ADMIN`, `SUPER_ADMIN`
 
-- **Endpoint:** `POST /api/v1/admin/invoices/order/{orderId}/generate`
-- **Auth:** Bearer Token
-- **Allowed roles:** `STAFF`, `ADMIN`, `SUPER_ADMIN`
-- **Description:** Idempotent — returns existing invoice if one already exists. Order must be in `CONFIRMED` or later active status.
+### GET `/api/v1/admin/warehouses`
 
-#### Response (201) — `InvoiceResponse`
+- HTTP: `200 OK`
+- Response: `ApiResponse<List<WarehouseResponse>>`
+- Behavior: active warehouses only, ordered by `createdAt ASC`
+- `WarehouseResponse` fields:
+  - `id`, `name`, `code`, `location`, `status`, `createdAt`
 
-### 11.2 Get Invoice by ID
+### GET `/api/v1/admin/warehouses/{id}`
 
-- **Endpoint:** `GET /api/v1/admin/invoices/{id}`
-- **Auth:** Bearer Token
-- **Allowed roles:** `STAFF`, `ADMIN`, `SUPER_ADMIN`
+- HTTP: `200 OK`
+- Response: `ApiResponse<WarehouseResponse>`
+- Errors:
+  - `404 WAREHOUSE_NOT_FOUND`
 
-### 11.3 Get Invoice by Order ID
+### POST `/api/v1/admin/warehouses`
 
-- **Endpoint:** `GET /api/v1/admin/invoices/order/{orderId}`
-- **Auth:** Bearer Token
-- **Allowed roles:** `STAFF`, `ADMIN`, `SUPER_ADMIN`
+- Role: `ADMIN`, `SUPER_ADMIN`
+- HTTP: `200 OK`
+- Body (`CreateWarehouseRequest`):
+  - `name`: required, max 100
+  - `code`: required, max 50, pattern `^[A-Za-z0-9_-]+$`
+  - `location`: optional, max 255
+- Response: `ApiResponse<WarehouseResponse>`
+- Errors:
+  - `400 BAD_REQUEST` if warehouse code already exists
+  - `422 VALIDATION_ERROR`
 
-### 11.4 Get Invoice by Code
+### PATCH `/api/v1/admin/warehouses/{id}`
 
-- **Endpoint:** `GET /api/v1/admin/invoices/code/{invoiceCode}`
-- **Auth:** Bearer Token
-- **Allowed roles:** `STAFF`, `ADMIN`, `SUPER_ADMIN`
+- Role: `ADMIN`, `SUPER_ADMIN`
+- HTTP: `200 OK`
+- Body (`UpdateWarehouseRequest`, all fields optional):
+  - `name`, `location`, `status`
+- Response: `ApiResponse<WarehouseResponse>`
+- Errors:
+  - `404 WAREHOUSE_NOT_FOUND`
+  - `422 VALIDATION_ERROR`
 
-### 11.5 List Invoices
+### DELETE `/api/v1/admin/warehouses/{id}`
 
-- **Endpoint:** `GET /api/v1/admin/invoices`
-- **Auth:** Bearer Token
-- **Allowed roles:** `STAFF`, `ADMIN`, `SUPER_ADMIN`
-
-#### Query Params
-
-Filters bind to `InvoiceFilter`. All params are optional. Pagination via Spring Pageable (`@PageableDefault(size=20, sort="issuedAt", direction=DESC)`).
-
-| Param | Type | Required | Description |
-|---|---|:---:|---|
-| `invoiceCode` | string | — | Partial, case-insensitive match |
-| `orderCode` | string | — | Partial, case-insensitive match via join to Order |
-| `status` | string | — | `InvoiceStatus` enum (e.g., `ISSUED`, `PAID`, `VOIDED`) |
-| `dateFrom` | date | — | Format: `yyyy-MM-dd` — filters on `issuedAt` |
-| `dateTo` | date | — | Format: `yyyy-MM-dd` — filters on `issuedAt` |
-| `page` | integer | — | Default: `0` |
-| `size` | integer | — | Default: `20` |
-| `sort` | string | — | Spring Pageable format, e.g., `sort=issuedAt,desc` (default: `issuedAt,desc`) |
-
-### 11.6 Update Invoice Status
-
-- **Endpoint:** `PATCH /api/v1/admin/invoices/{id}/status`
-- **Auth:** Bearer Token
-- **Allowed roles:** `STAFF`, `ADMIN`, `SUPER_ADMIN`
-
-**Allowed transitions:** `ISSUED` → `PAID` | `ISSUED` → `VOIDED` (both `PAID` and `VOIDED` are terminal)
-
-#### Request Body
-
-```json
-{
-  "status": "PAID",
-  "notes": "Thanh toán qua chuyển khoản ngân hàng"
-}
-```
-
-| Field | Type | Required | Nullable | Validation | Description |
-|---|---|:---:|:---:|---|---|
-| `status` | string | ✓ | No | `PAID` or `VOIDED` | New invoice status |
-| `notes` | string | — | Yes | max 1000 | Reason / annotation |
-
-#### Response (ERROR)
-
-| HTTP | Code | When |
-|---|---|---|
-| 422 | `INVOICE_STATUS_INVALID` | Invalid transition |
-| 409 | `INVOICE_ALREADY_EXISTS` | Invoice already exists (on generate) |
+- Role: `ADMIN`, `SUPER_ADMIN`
+- HTTP: `200 OK`
+- Response: `ApiResponse<Void>` with `data = null`
+- Behavior: soft-delete
+- Errors:
+  - `404 WAREHOUSE_NOT_FOUND`
 
 ---
 
-## 12. Promotion Management
+## 7. Orders
 
-### 12.1 Create Promotion
+Role:
+- Read and non-cancel transitions: `STAFF`, `ADMIN`, `SUPER_ADMIN`
+- Cancel: `ADMIN`, `SUPER_ADMIN`
 
-- **Endpoint:** `POST /api/v1/admin/promotions`
-- **Auth:** Bearer Token
-- **Allowed roles:** `ADMIN`, `SUPER_ADMIN`
+### GET `/api/v1/admin/orders`
 
-#### Request Body
+- HTTP: `200 OK`
+- Query params (`OrderAdminFilter`):
+  - `customerId`
+  - `status`
+  - `paymentStatus`
+  - `page`, `size`, `sort`
+- Response: `ApiResponse<PagedResponse<AdminOrderListItemResponse>>`
+- Repository ordering: `createdAt DESC`
+- `AdminOrderListItemResponse` fields:
+  - `id`, `orderCode`, `customerId`, `customerName`, `customerEmail`, `status`, `paymentMethod`, `paymentStatus`, `totalItems`, `totalAmount`, `createdAt`
 
-```json
-{
-  "name": "Summer Sale 2026",
-  "description": "20% off all products",
-  "discountType": "PERCENTAGE",
-  "discountValue": 20.00,
-  "maxDiscountAmount": 100000.00,
-  "minimumOrderAmount": 200000.00,
-  "scope": "ALL",
-  "startDate": "2026-06-01T00:00:00",
-  "endDate": "2026-06-30T23:59:59",
-  "usageLimit": 1000
-}
-```
+### GET `/api/v1/admin/orders/{id}`
 
-| Field | Type | Required | Nullable | Validation | Description |
-|---|---|:---:|:---:|---|---|
-| `name` | string | ✓ | No | max 200 | Promotion name |
-| `description` | string | — | Yes | max 2000 | Description |
-| `discountType` | string | ✓ | No | `PERCENTAGE`, `FIXED_AMOUNT` | Discount calculation type |
-| `discountValue` | decimal | ✓ | No | ≥ 0.01, max 16 digits, 2 decimal places | Discount value |
-| `maxDiscountAmount` | decimal | — | Yes | ≥ 0.01 | Cap for PERCENTAGE type |
-| `minimumOrderAmount` | decimal | — | Yes | ≥ 0 | Minimum order to qualify |
-| `scope` | string | ✓ | No | `PromotionScope` enum | `ALL`, `CATEGORY`, `BRAND`, `PRODUCT` |
-| `startDate` | datetime | ✓ | No | ISO-8601 | Activation date |
-| `endDate` | datetime | ✓ | No | ISO-8601 | Expiry date |
-| `usageLimit` | integer | — | Yes | ≥ 1 | Total usage cap (null = unlimited) |
+- HTTP: `200 OK`
+- Response: `ApiResponse<OrderResponse>`
+- Errors:
+  - `404 ORDER_NOT_FOUND`
 
-#### Response (201) — `PromotionResponse`
+### GET `/api/v1/admin/orders/code/{orderCode}`
 
-### 12.2 Get Promotion by ID
+- HTTP: `200 OK`
+- Response: `ApiResponse<OrderResponse>`
+- Errors:
+  - `404 ORDER_NOT_FOUND`
 
-- **Endpoint:** `GET /api/v1/admin/promotions/{id}`
-- **Auth:** Bearer Token
-- **Allowed roles:** `ADMIN`, `SUPER_ADMIN`
+### POST `/api/v1/admin/orders/{id}/confirm`
 
-### 12.3 List Promotions
+- HTTP: `200 OK`
+- Response: `ApiResponse<OrderResponse>`
+- Behavior:
+  - Allowed from `PENDING` or `AWAITING_PAYMENT`.
+  - Online orders also require `paymentStatus = PAID`.
+- Errors:
+  - `404 ORDER_NOT_FOUND`
+  - `422 ORDER_STATUS_INVALID`
 
-- **Endpoint:** `GET /api/v1/admin/promotions`
-- **Auth:** Bearer Token
-- **Allowed roles:** `ADMIN`, `SUPER_ADMIN`
+### POST `/api/v1/admin/orders/{id}/process`
 
-#### Query Params
+- HTTP: `200 OK`
+- Response: `ApiResponse<OrderResponse>`
+- Behavior:
+  - `CONFIRMED -> PROCESSING`
+- Errors:
+  - `404 ORDER_NOT_FOUND`
+  - `422 ORDER_STATUS_INVALID`
 
-Filters bind to `PromotionFilter`. All params are optional. Pagination via Spring Pageable (`@PageableDefault(size=20, sort="createdAt")`).
+### POST `/api/v1/admin/orders/{id}/deliver`
 
-| Param | Type | Required | Description |
-|---|---|:---:|---|
-| `name` | string | — | Partial, case-insensitive match |
-| `scope` | string | — | `PromotionScope` enum (e.g., `ALL`, `CATEGORY`, `BRAND`, `PRODUCT`) |
-| `active` | boolean | — | `true` / `false` |
-| `dateFrom` | date | — | Format: `yyyy-MM-dd` — filters on `startDate` |
-| `dateTo` | date | — | Format: `yyyy-MM-dd` — filters on `endDate` |
-| `page` | integer | — | Default: `0` |
-| `size` | integer | — | Default: `20` |
-| `sort` | string | — | Spring Pageable format, e.g., `sort=createdAt,desc` |
+- HTTP: `200 OK`
+- Response: `ApiResponse<OrderResponse>`
+- Behavior:
+  - `SHIPPED -> DELIVERED`
+- Errors:
+  - `404 ORDER_NOT_FOUND`
+  - `422 ORDER_STATUS_INVALID`
 
-### 12.4 Update Promotion
+### POST `/api/v1/admin/orders/{id}/complete`
 
-- **Endpoint:** `PATCH /api/v1/admin/promotions/{id}`
-- **Auth:** Bearer Token
-- **Allowed roles:** `ADMIN`, `SUPER_ADMIN`
+- HTTP: `200 OK`
+- Response: `ApiResponse<OrderResponse>`
+- Behavior:
+  - `DELIVERED -> COMPLETED`
+  - Commits reserved stock via inventory completion
+- Errors:
+  - `404 ORDER_NOT_FOUND`
+  - `422 ORDER_CANNOT_COMPLETE`
 
-All fields optional.
+### POST `/api/v1/admin/orders/{id}/cancel`
 
-| Field | Type | Nullable | Validation | Description |
-|---|---|:---:|---|---|
-| `name` | string | Yes | max 200 | Promotion name |
-| `description` | string | Yes | max 2000 | Description |
-| `discountValue` | decimal | Yes | ≥ 0.01 | Discount value |
-| `maxDiscountAmount` | decimal | Yes | ≥ 0.01 | Cap for PERCENTAGE type |
-| `minimumOrderAmount` | decimal | Yes | ≥ 0 | Minimum order to qualify |
-| `startDate` | datetime | Yes | ISO-8601 | Activation date |
-| `endDate` | datetime | Yes | ISO-8601 | Expiry date |
-| `active` | boolean | Yes | — | Enable/disable promotion |
-| `usageLimit` | integer | Yes | ≥ 1 | Total usage cap |
+- Role: `ADMIN`, `SUPER_ADMIN`
+- HTTP: `200 OK`
+- Response: `ApiResponse<OrderResponse>`
+- Behavior:
+  - Cancellable from `PENDING`, `AWAITING_PAYMENT`, or `CONFIRMED`
+  - Releases reserved stock
+- Errors:
+  - `404 ORDER_NOT_FOUND`
+  - `422 ORDER_CANNOT_CANCEL`
 
-### 12.5 Delete Promotion (Soft)
-
-- **Endpoint:** `DELETE /api/v1/admin/promotions/{id}`
-- **Auth:** Bearer Token
-- **Allowed roles:** `ADMIN`, `SUPER_ADMIN`
-- Returns HTTP 204 (no content body but wrapped in `ApiResponse`).
-
-### 12.6 Add Rule to Promotion
-
-- **Endpoint:** `POST /api/v1/admin/promotions/{id}/rules`
-- **Auth:** Bearer Token
-- **Allowed roles:** `ADMIN`, `SUPER_ADMIN`
-
-#### Request Body
-
-```json
-{
-  "ruleType": "MIN_ORDER_AMOUNT",
-  "ruleValue": "200000",
-  "description": "Đơn hàng tối thiểu 200,000đ"
-}
-```
-
-| Field | Type | Required | Nullable | Validation | Description |
-|---|---|:---:|:---:|---|---|
-| `ruleType` | string | ✓ | No | `RuleType` enum | See rule types below |
-| `ruleValue` | string | ✓ | No | max 500 | Interpreted per ruleType |
-| `description` | string | — | Yes | max 255 | Human-readable description |
-
-**RuleType values and `ruleValue` format:**
-
-| `ruleType` | `ruleValue` format | Example |
-|---|---|---|
-| `MIN_ORDER_AMOUNT` | Decimal string | `"200000"` |
-| `SPECIFIC_PRODUCTS` | Comma-separated product IDs | `"1,2,5"` |
-| `SPECIFIC_CATEGORIES` | Comma-separated category IDs | `"3,7"` |
-| `SPECIFIC_BRANDS` | Comma-separated brand IDs | `"2"` |
-| `FIRST_ORDER` | `"true"` | `"true"` |
-
-### 12.7 Remove Rule from Promotion
-
-- **Endpoint:** `DELETE /api/v1/admin/promotions/{id}/rules/{ruleId}`
-- **Auth:** Bearer Token
-- **Allowed roles:** `ADMIN`, `SUPER_ADMIN`
+Shared order DTO fields:
+- `OrderResponse`: `id`, `orderCode`, `customerId`, `status`, `paymentMethod`, `paymentStatus`, shipping snapshot fields, `subTotal`, `discountAmount`, `shippingFee`, `totalAmount`, `voucherCode`, `customerNote`, `items`, `createdAt`
+- `OrderItemResponse`: `id`, `variantId`, `productName`, `variantName`, `sku`, `unitPrice`, `salePrice`, `quantity`, `lineTotal`
 
 ---
 
-## 13. Voucher Management
+## 8. Payments
 
-### 13.1 List Vouchers
+Role:
+- `STAFF`, `ADMIN`, `SUPER_ADMIN`
 
-- **Endpoint:** `GET /api/v1/admin/vouchers`
-- **Auth:** Bearer Token
-- **Allowed roles:** `STAFF`, `ADMIN`, `SUPER_ADMIN`
+### GET `/api/v1/admin/payments`
 
-#### Query Params (VoucherFilter)
+- HTTP: `200 OK`
+- Query params (`PaymentFilter`):
+  - `method`
+  - `status`
+  - `orderCode`
+  - `dateFrom`
+  - `dateTo`
+  - `page`, `size`, `sort`
+- Response: `ApiResponse<PagedResponse<PaymentResponse>>`
+- Sorting:
+  - No controller-level default sort is declared. Send `sort` explicitly if ordering matters.
+- Notes:
+  - List responses omit `transactions`.
 
-All params are optional.
+### GET `/api/v1/admin/payments/{id}`
 
-| Param | Type | Required | Description |
-|---|---|:---:|---|
-| `code` | string | — | Partial, case-insensitive match on voucher code |
-| `promotionId` | long | — | Filter by linked promotion |
-| `active` | boolean | — | `true` / `false` |
-| `dateFrom` | date | — | Format: `yyyy-MM-dd` — filters on `startDate` |
-| `dateTo` | date | — | Format: `yyyy-MM-dd` — filters on `endDate` |
-| `page` | integer | — | Default: `0` |
-| `size` | integer | — | Default: `20` |
-| `sort` | string | — | Spring Pageable format |
+- HTTP: `200 OK`
+- Response: `ApiResponse<PaymentResponse>`
+- Errors:
+  - `404 PAYMENT_NOT_FOUND`
 
-### 13.2 Get Voucher by ID
+### GET `/api/v1/admin/payments/code/{code}`
 
-- **Endpoint:** `GET /api/v1/admin/vouchers/{id}`
-- **Auth:** Bearer Token
-- **Allowed roles:** `STAFF`, `ADMIN`, `SUPER_ADMIN`
+- HTTP: `200 OK`
+- Response: `ApiResponse<PaymentResponse>`
+- Errors:
+  - `404 PAYMENT_NOT_FOUND`
 
-### 13.3 Get Voucher by Code
+### GET `/api/v1/admin/payments/order/{orderId}`
 
-- **Endpoint:** `GET /api/v1/admin/vouchers/code/{code}`
-- **Auth:** Bearer Token
-- **Allowed roles:** `STAFF`, `ADMIN`, `SUPER_ADMIN`
+- HTTP: `200 OK`
+- Response: `ApiResponse<PaymentResponse>`
+- Errors:
+  - `404 PAYMENT_NOT_FOUND`
 
-### 13.4 Get Voucher Usage History
+### POST `/api/v1/admin/payments/order/{orderId}/complete`
 
-- **Endpoint:** `GET /api/v1/admin/vouchers/{id}/usages`
-- **Auth:** Bearer Token
-- **Allowed roles:** `STAFF`, `ADMIN`, `SUPER_ADMIN`
+- HTTP: `200 OK`
+- Response: `ApiResponse<PaymentResponse>`
+- Behavior:
+  - COD-only operational flow
+  - Idempotent if already `PAID`
+- Errors:
+  - `404 PAYMENT_NOT_FOUND`
+  - `409 PAYMENT_ALREADY_PROCESSED`
 
-Returns paginated `VoucherUsageResponse`. Pagination: `@PageableDefault(size = 20)`.
+### GET `/api/v1/admin/payments/{id}/transactions`
 
-### 13.5 Create Voucher
+- HTTP: `200 OK`
+- Response: `ApiResponse<List<TransactionResponse>>`
+- Errors:
+  - `404 PAYMENT_NOT_FOUND`
 
-- **Endpoint:** `POST /api/v1/admin/vouchers`
-- **Auth:** Bearer Token
-- **Allowed roles:** `ADMIN`, `SUPER_ADMIN` ← more restrictive than class-level
-
-#### Request Body
-
-```json
-{
-  "code": "SALE20",
-  "promotionId": 1,
-  "usageLimit": 500,
-  "usageLimitPerUser": 1,
-  "startDate": "2026-06-01T00:00:00",
-  "endDate": "2026-06-30T23:59:59"
-}
-```
-
-| Field | Type | Required | Nullable | Validation | Description |
-|---|---|:---:|:---:|---|---|
-| `code` | string | — | Yes | max 100 | Leave blank to auto-generate |
-| `promotionId` | long | ✓ | No | existing promotion | Linked promotion |
-| `usageLimit` | integer | — | Yes | ≥ 1 | Total redemption cap (null = unlimited) |
-| `usageLimitPerUser` | integer | — | Yes | ≥ 1 | Per-customer cap (null = unlimited) |
-| `startDate` | datetime | ✓ | No | ISO-8601 | Activation date |
-| `endDate` | datetime | ✓ | No | ISO-8601 | Expiry date |
-
-#### Response (201) — `VoucherResponse`
-
-```json
-{
-  "data": {
-    "id": 1,
-    "code": "SALE20",
-    "promotionId": 1,
-    "promotionName": "Summer Sale 2026",
-    "discountType": "PERCENTAGE",
-    "discountValue": 20.00,
-    "maxDiscountAmount": 100000.00,
-    "minimumOrderAmount": 200000.00,
-    "usageLimit": 500,
-    "usageCount": 0,
-    "usageLimitPerUser": 1,
-    "startDate": "2026-06-01T00:00:00",
-    "endDate": "2026-06-30T23:59:59",
-    "active": true,
-    "createdAt": "2026-04-20T08:00:00Z"
-  }
-}
-```
-
-#### Response (ERROR)
-
-| HTTP | Code | When |
-|---|---|---|
-| 409 | `VOUCHER_CODE_ALREADY_EXISTS` | Code already in use |
-| 404 | `PROMOTION_NOT_FOUND` | Promotion not found |
-
-### 13.6 Update Voucher
-
-- **Endpoint:** `PATCH /api/v1/admin/vouchers/{id}`
-- **Auth:** Bearer Token
-- **Allowed roles:** `ADMIN`, `SUPER_ADMIN`
-
-All fields optional.
-
-| Field | Type | Nullable | Validation | Description |
-|---|---|:---:|---|---|
-| `usageLimit` | integer | Yes | ≥ 1 | Total redemption cap |
-| `usageLimitPerUser` | integer | Yes | ≥ 1 | Per-customer cap |
-| `startDate` | datetime | Yes | ISO-8601 | Activation date |
-| `endDate` | datetime | Yes | ISO-8601 | Expiry date |
-| `active` | boolean | Yes | — | Enable/disable voucher |
-
-### 13.7 Delete Voucher (Soft)
-
-- **Endpoint:** `DELETE /api/v1/admin/vouchers/{id}`
-- **Auth:** Bearer Token
-- **Allowed roles:** `ADMIN`, `SUPER_ADMIN`
+Shared payment DTO fields:
+- `PaymentResponse`: `id`, `orderId`, `orderCode`, `paymentCode`, `method`, `status`, `amount`, `paidAt`, `transactions`, `createdAt`
+- `TransactionResponse`: `id`, `transactionCode`, `status`, `amount`, `method`, `provider`, `providerTxnId`, `referenceType`, `referenceId`, `note`, `createdAt`
 
 ---
 
-## 14. Review Moderation
+## 9. Shipments
 
-### 14.1 Get Pending Reviews
+Role:
+- `STAFF`, `ADMIN`, `SUPER_ADMIN`
 
-- **Endpoint:** `GET /api/v1/reviews/pending`
-- **Auth:** Bearer Token
-- **Allowed roles:** `STAFF`, `ADMIN`, `SUPER_ADMIN`
-- **Note:** This endpoint is not under `/admin/**` path — it lives in `ReviewController`.
-- **Pagination:** `@PageableDefault(size = 20)` via Spring Pageable.
+### POST `/api/v1/admin/shipments`
 
-#### Query Params (ReviewFilter)
+- HTTP: `201 Created`
+- Body (`CreateShipmentRequest`):
+  - `orderId`: required
+  - `carrier`: required, max 100
+  - `trackingNumber`: optional, max 200
+  - `estimatedDeliveryDate`: optional date
+  - `shippingFee`: optional, decimal >= 0
+  - `note`: optional, max 500
+- Response: `ApiResponse<ShipmentResponse>`
+- Behavior:
+  - Order must be in `PROCESSING`.
+  - Creates an initial `PENDING` shipment event.
+  - Transitions the order to `SHIPPED`.
+- Errors:
+  - `404 ORDER_NOT_FOUND`
+  - `409 SHIPMENT_ALREADY_EXISTS`
+  - `422 ORDER_STATUS_INVALID`
+  - `422 VALIDATION_ERROR`
 
-All params are optional. Defaults to `status=PENDING` if `status` is not provided.
+### GET `/api/v1/admin/shipments/{id}`
 
-| Param | Type | Required | Description |
-|---|---|:---:|---|
-| `status` | string | — | `PENDING`, `APPROVED`, `REJECTED`. Default: `PENDING` |
-| `productId` | long | — | Filter by product |
-| `customerId` | long | — | Filter by customer |
-| `minRating` | integer | — | Minimum rating (1–5, inclusive) |
-| `maxRating` | integer | — | Maximum rating (1–5, inclusive) |
-| `page` | integer | — | Default: `0` |
-| `size` | integer | — | Default: `20` |
-| `sort` | string | — | Spring Pageable format, e.g., `sort=createdAt,asc` |
+- HTTP: `200 OK`
+- Response: `ApiResponse<ShipmentResponse>`
+- Errors:
+  - `404 SHIPMENT_NOT_FOUND`
 
-#### Response (200) — Paginated `ReviewResponse`
+### GET `/api/v1/admin/shipments/order/{orderId}`
 
-```json
-{
-  "data": {
-    "items": [
-      {
-        "id": 1,
-        "customerId": 5,
-        "customerName": "Nguyen Van Loc",
-        "productId": 1,
-        "productName": "Áo thun basic nam",
-        "variantId": 1,
-        "variantName": "Trắng / M",
-        "sku": "ATBN-WH-M",
-        "orderItemId": 1,
-        "rating": 5,
-        "comment": "Sản phẩm rất tốt",
-        "status": "PENDING",
-        "adminNote": null,
-        "moderatedAt": null,
-        "moderatedBy": null,
-        "createdAt": "2026-04-20T08:00:00Z",
-        "updatedAt": null
-      }
-    ],
-    "...pagination fields": "..."
-  }
-}
-```
+- HTTP: `200 OK`
+- Response: `ApiResponse<ShipmentResponse>`
+- Errors:
+  - `404 SHIPMENT_NOT_FOUND`
 
-### 14.2 Get Review by ID
+### GET `/api/v1/admin/shipments`
 
-- **Endpoint:** `GET /api/v1/reviews/{id}`
-- **Auth:** Bearer Token
-- **Allowed roles:** `STAFF`, `ADMIN`, `SUPER_ADMIN`
+- HTTP: `200 OK`
+- Query params (`ShipmentFilter`):
+  - `orderId`
+  - `orderCode`
+  - `carrier`
+  - `status`
+  - `dateFrom`
+  - `dateTo`
+  - `page`, `size`, `sort`
+- Response: `ApiResponse<PagedResponse<ShipmentResponse>>`
+- Default sort: `createdAt ASC`
+- Notes:
+  - List responses omit `events`.
 
-### 14.3 Moderate Review (Approve / Reject)
+### PATCH `/api/v1/admin/shipments/{id}`
 
-- **Endpoint:** `PATCH /api/v1/reviews/{id}/moderate`
-- **Auth:** Bearer Token
-- **Allowed roles:** `STAFF`, `ADMIN`, `SUPER_ADMIN`
+- HTTP: `200 OK`
+- Body (`UpdateShipmentRequest`, all fields optional):
+  - `carrier`, `trackingNumber`, `estimatedDeliveryDate`, `shippingFee`, `note`
+- Response: `ApiResponse<ShipmentResponse>`
+- Errors:
+  - `404 SHIPMENT_NOT_FOUND`
+  - `422 VALIDATION_ERROR`
 
-#### Request Body
+### PATCH `/api/v1/admin/shipments/{id}/status`
 
-```json
-{
-  "action": "APPROVED",
-  "adminNote": "Review passes content guidelines"
-}
-```
+- HTTP: `200 OK`
+- Body (`UpdateShipmentStatusRequest`):
+  - `status`: required
+  - `location`: optional, max 255
+  - `description`: required, max 500
+  - `eventTime`: optional timestamp, defaults to now
+- Response: `ApiResponse<ShipmentResponse>`
+- Behavior:
+  - Valid transitions are defined by `ShipmentStatus.canTransitionTo`.
+  - On `DELIVERED`, the order is also moved to `DELIVERED`.
+- Errors:
+  - `404 SHIPMENT_NOT_FOUND`
+  - `422 SHIPMENT_STATUS_INVALID`
+  - `422 VALIDATION_ERROR`
 
-| Field | Type | Required | Nullable | Validation | Description |
-|---|---|:---:|:---:|---|---|
-| `action` | string | ✓ | No | `APPROVED` or `REJECTED` (regex validated) | Moderation decision |
-| `adminNote` | string | — | Yes | max 500 | Internal note |
-
-#### Response (ERROR)
-
-| HTTP | Code | When |
-|---|---|---|
-| 409 | `REVIEW_ALREADY_MODERATED` | Review already moderated |
-| 404 | `REVIEW_NOT_FOUND` | Review not found |
-
-### 14.4 Delete Review (Soft)
-
-- **Endpoint:** `DELETE /api/v1/reviews/{id}`
-- **Auth:** Bearer Token
-- **Allowed roles:** `ADMIN`, `SUPER_ADMIN` ← STAFF cannot delete
+Shared shipment DTO fields:
+- `ShipmentResponse`: `id`, `orderId`, `orderCode`, `shipmentCode`, `carrier`, `trackingNumber`, `status`, `estimatedDeliveryDate`, `deliveredAt`, `shippingFee`, `note`, `events`, `createdAt`, `updatedAt`
+- `ShipmentEventResponse`: `id`, `status`, `location`, `description`, `eventTime`
 
 ---
 
-## 15. Missing Admin Endpoints
+## 10. Invoices
 
-The following admin features are **not yet implemented** in the codebase:
+Role:
+- `STAFF`, `ADMIN`, `SUPER_ADMIN`
 
-| Feature | Missing API |
-|---|---|
-| Customer management | `GET /api/v1/admin/customers` — list/search customers |
-| Customer detail | `GET /api/v1/admin/customers/{id}` |
-| Customer disable | `PATCH /api/v1/admin/customers/{id}/status` |
-| Admin user list | `GET /api/v1/admin/users` |
-| Admin user get | `GET /api/v1/admin/users/{id}` |
-| Admin user disable | `PATCH /api/v1/admin/users/{id}/status` |
-| Product media upload | `POST /api/v1/admin/products/{id}/media` |
-| Product media delete | `DELETE /api/v1/admin/products/{id}/media/{mediaId}` |
-| Refund management | `POST /api/v1/admin/payments/{id}/refund` |
-| Dashboard / reports | `GET /api/v1/admin/dashboard/**` |
-| CMS / banners | `GET/POST/PATCH/DELETE /api/v1/admin/banners` |
-| Loyalty points management | Not scoped yet |
+### POST `/api/v1/admin/invoices/order/{orderId}/generate`
+
+- HTTP: `201 Created`
+- Body: none
+- Response: `ApiResponse<InvoiceResponse>`
+- Behavior:
+  - Idempotent if an invoice already exists.
+  - Order must be in one of: `CONFIRMED`, `PROCESSING`, `SHIPPED`, `DELIVERED`, `COMPLETED`.
+- Errors:
+  - `404 ORDER_NOT_FOUND`
+  - `422 INVOICE_STATUS_INVALID`
+
+### GET `/api/v1/admin/invoices/{id}`
+
+- HTTP: `200 OK`
+- Response: `ApiResponse<InvoiceResponse>`
+- Errors:
+  - `404 INVOICE_NOT_FOUND`
+
+### GET `/api/v1/admin/invoices/order/{orderId}`
+
+- HTTP: `200 OK`
+- Response: `ApiResponse<InvoiceResponse>`
+- Errors:
+  - `404 INVOICE_NOT_FOUND`
+
+### GET `/api/v1/admin/invoices/code/{invoiceCode}`
+
+- HTTP: `200 OK`
+- Response: `ApiResponse<InvoiceResponse>`
+- Errors:
+  - `404 INVOICE_NOT_FOUND`
+
+### GET `/api/v1/admin/invoices`
+
+- HTTP: `200 OK`
+- Query params (`InvoiceFilter`):
+  - `invoiceCode`
+  - `orderCode`
+  - `status`
+  - `dateFrom`
+  - `dateTo`
+  - `page`, `size`, `sort`
+- Response: `ApiResponse<PagedResponse<InvoiceResponse>>`
+- Default sort: `issuedAt DESC`
+- Notes:
+  - List responses omit `items` and many detail fields.
+
+### PATCH `/api/v1/admin/invoices/{id}/status`
+
+- HTTP: `200 OK`
+- Body (`UpdateInvoiceStatusRequest`):
+  - `status`: required, only `PAID` or `VOIDED` are accepted by the service
+  - `notes`: optional, max 1000
+- Response: `ApiResponse<InvoiceResponse>`
+- Errors:
+  - `404 INVOICE_NOT_FOUND`
+  - `422 INVOICE_STATUS_INVALID`
+  - `422 VALIDATION_ERROR`
+
+Shared invoice DTO fields:
+- `InvoiceResponse`: `id`, `invoiceCode`, `status`, `issuedAt`, `dueDate`, `notes`, `orderId`, `orderCode`, `paymentMethod`, `paymentStatus`, `paidAt`, customer snapshot fields, billing snapshot fields, `items`, `subTotal`, `discountAmount`, `shippingFee`, `totalAmount`, `voucherCode`, `createdAt`
+- `InvoiceItemResponse`: `variantId`, `productName`, `variantName`, `sku`, `unitPrice`, `salePrice`, `effectivePrice`, `quantity`, `lineTotal`
+
+---
+
+## 11. Promotions
+
+Role:
+- `ADMIN`, `SUPER_ADMIN`
+
+### GET `/api/v1/admin/promotions`
+
+- HTTP: `200 OK`
+- Query params (`PromotionFilter`):
+  - `name`
+  - `scope`
+  - `active`
+  - `dateFrom`
+  - `dateTo`
+  - `page`, `size`, `sort`
+- Response: `ApiResponse<PagedResponse<PromotionResponse>>`
+- Default sort: `createdAt ASC`
+- Notes:
+  - `scope` is a string filter. Invalid values are ignored by the specification.
+  - List responses omit `rules`.
+
+### GET `/api/v1/admin/promotions/{id}`
+
+- HTTP: `200 OK`
+- Response: `ApiResponse<PromotionResponse>`
+- Errors:
+  - `404 PROMOTION_NOT_FOUND`
+
+### POST `/api/v1/admin/promotions`
+
+- HTTP: `201 Created`
+- Body (`CreatePromotionRequest`):
+  - `name`: required, max 200
+  - `description`: optional, max 2000
+  - `discountType`: required
+  - `discountValue`: required, decimal >= 0.01
+  - `maxDiscountAmount`: optional, decimal >= 0.01
+  - `minimumOrderAmount`: optional, decimal >= 0
+  - `scope`: required
+  - `startDate`: required
+  - `endDate`: required, must be after `startDate`
+  - `usageLimit`: optional, min 1
+- Response: `ApiResponse<PromotionResponse>`
+- Errors:
+  - `400 BAD_REQUEST` if `endDate` is not after `startDate`
+  - `422 VALIDATION_ERROR`
+
+### PATCH `/api/v1/admin/promotions/{id}`
+
+- HTTP: `200 OK`
+- Body (`UpdatePromotionRequest`, all fields optional):
+  - `name`, `description`, `discountValue`, `maxDiscountAmount`, `minimumOrderAmount`, `startDate`, `endDate`, `active`, `usageLimit`
+- Response: `ApiResponse<PromotionResponse>`
+- Errors:
+  - `404 PROMOTION_NOT_FOUND`
+  - `400 BAD_REQUEST` if the resulting date range is invalid
+  - `422 VALIDATION_ERROR`
+
+### DELETE `/api/v1/admin/promotions/{id}`
+
+- HTTP: `204 No Content`
+- Response body: treat as empty
+- Behavior: soft-delete
+- Errors:
+  - `404 PROMOTION_NOT_FOUND`
+
+### POST `/api/v1/admin/promotions/{id}/rules`
+
+- HTTP: `201 Created`
+- Body (`AddRuleRequest`):
+  - `ruleType`: required
+  - `ruleValue`: required, max 500
+  - `description`: optional, max 255
+- Response: `ApiResponse<PromotionResponse>`
+- Errors:
+  - `404 PROMOTION_NOT_FOUND`
+  - `422 VALIDATION_ERROR`
+
+### DELETE `/api/v1/admin/promotions/{id}/rules/{ruleId}`
+
+- HTTP: `204 No Content`
+- Response body: treat as empty
+- Errors:
+  - `404 PROMOTION_NOT_FOUND`
+  - `404 PROMOTION_RULE_NOT_FOUND`
+
+Shared promotion DTO fields:
+- `PromotionResponse`: `id`, `name`, `description`, `discountType`, `discountValue`, `maxDiscountAmount`, `minimumOrderAmount`, `scope`, `startDate`, `endDate`, `active`, `usageLimit`, `usageCount`, `rules`, `createdAt`, `updatedAt`
+- `PromotionRuleResponse`: `id`, `ruleType`, `ruleValue`, `description`
+
+---
+
+## 12. Vouchers
+
+Role:
+- Read: `STAFF`, `ADMIN`, `SUPER_ADMIN`
+- Mutations: `ADMIN`, `SUPER_ADMIN`
+
+### GET `/api/v1/admin/vouchers`
+
+- HTTP: `200 OK`
+- Query params (`VoucherFilter`):
+  - `code`
+  - `promotionId`
+  - `active`
+  - `dateFrom`
+  - `dateTo`
+  - `page`, `size`, `sort`
+- Response: `ApiResponse<PagedResponse<VoucherResponse>>`
+- Sorting:
+  - No controller-level default sort is declared. Send `sort` explicitly if ordering matters.
+
+### GET `/api/v1/admin/vouchers/{id}`
+
+- HTTP: `200 OK`
+- Response: `ApiResponse<VoucherResponse>`
+- Errors:
+  - `404 VOUCHER_NOT_FOUND`
+
+### GET `/api/v1/admin/vouchers/code/{code}`
+
+- HTTP: `200 OK`
+- Response: `ApiResponse<VoucherResponse>`
+- Errors:
+  - `404 VOUCHER_NOT_FOUND`
+
+### GET `/api/v1/admin/vouchers/{id}/usages`
+
+- HTTP: `200 OK`
+- Query params:
+  - `page`, `size`, `sort`
+- Response: `ApiResponse<PagedResponse<VoucherUsageResponse>>`
+- Errors:
+  - `404 VOUCHER_NOT_FOUND`
+
+### POST `/api/v1/admin/vouchers`
+
+- Role: `ADMIN`, `SUPER_ADMIN`
+- HTTP: `200 OK`
+- Body (`CreateVoucherRequest`):
+  - `code`: optional, max 100, auto-generated if blank
+  - `promotionId`: required
+  - `usageLimit`: optional, min 1
+  - `usageLimitPerUser`: optional, min 1
+  - `startDate`: required
+  - `endDate`: required, must be after `startDate`
+- Response: `ApiResponse<VoucherResponse>`
+- Errors:
+  - `404 PROMOTION_NOT_FOUND`
+  - `409 VOUCHER_CODE_ALREADY_EXISTS`
+  - `400 BAD_REQUEST` if `endDate` is not after `startDate`
+  - `422 VALIDATION_ERROR`
+
+### PATCH `/api/v1/admin/vouchers/{id}`
+
+- Role: `ADMIN`, `SUPER_ADMIN`
+- HTTP: `200 OK`
+- Body (`UpdateVoucherRequest`, all fields optional):
+  - `usageLimit`, `usageLimitPerUser`, `startDate`, `endDate`, `active`
+- Response: `ApiResponse<VoucherResponse>`
+- Errors:
+  - `404 VOUCHER_NOT_FOUND`
+  - `400 BAD_REQUEST` if the resulting date range is invalid
+  - `422 VALIDATION_ERROR`
+
+### DELETE `/api/v1/admin/vouchers/{id}`
+
+- Role: `ADMIN`, `SUPER_ADMIN`
+- HTTP: `200 OK`
+- Response: `ApiResponse<Void>` with `data = null`
+- Behavior: soft-delete
+- Errors:
+  - `404 VOUCHER_NOT_FOUND`
+
+Shared voucher DTO fields:
+- `VoucherResponse`: `id`, `code`, `promotionId`, `promotionName`, `discountType`, `discountValue`, `maxDiscountAmount`, `minimumOrderAmount`, `usageLimit`, `usageCount`, `usageLimitPerUser`, `startDate`, `endDate`, `active`, `createdAt`
+- `VoucherUsageResponse`: `id`, `voucherId`, `voucherCode`, `customerId`, `orderId`, `discountAmount`, `usedAt`
+
+---
+
+## 13. Reviews
+
+Two admin review surfaces exist in the current codebase.
+
+### 13.1 Legacy admin review routes under `/api/v1/reviews`
+
+Role:
+- `GET /pending`, `GET /{id}`, `PATCH /{id}/moderate`: `STAFF`, `ADMIN`, `SUPER_ADMIN`
+- `DELETE /{id}`: `ADMIN`, `SUPER_ADMIN`
+
+#### GET `/api/v1/reviews/pending`
+
+- HTTP: `200 OK`
+- Query params:
+  - `status`
+  - `productId`
+  - `customerId`
+  - `minRating`
+  - `maxRating`
+  - `page`, `size`, `sort`
+- Response: `ApiResponse<PagedResponse<ReviewResponse>>`
+- Behavior:
+  - If `status` is omitted, the service forces `PENDING`.
+
+#### GET `/api/v1/reviews/{id}`
+
+- HTTP: `200 OK`
+- Response: `ApiResponse<ReviewResponse>`
+- Errors:
+  - `404 REVIEW_NOT_FOUND`
+
+#### PATCH `/api/v1/reviews/{id}/moderate`
+
+- HTTP: `200 OK`
+- Body (`ModerateReviewRequest`):
+  - `action`: required, only `APPROVED` or `REJECTED` are accepted by the service
+  - `adminNote`: optional, max 500
+- Response: `ApiResponse<ReviewResponse>`
+- Errors:
+  - `404 REVIEW_NOT_FOUND`
+  - `409 REVIEW_ALREADY_MODERATED`
+  - `400 BAD_REQUEST` for any action other than `APPROVED` or `REJECTED`
+  - `422 VALIDATION_ERROR`
+
+#### DELETE `/api/v1/reviews/{id}`
+
+- HTTP: `200 OK`
+- Response: `ApiResponse<Void>` with `data = null`
+- Behavior: soft-delete
+- Errors:
+  - `404 REVIEW_NOT_FOUND`
+
+### 13.2 Current admin review routes under `/api/v1/admin/reviews`
+
+Role:
+- `STAFF`, `ADMIN`, `SUPER_ADMIN`
+
+#### GET `/api/v1/admin/reviews`
+
+- HTTP: `200 OK`
+- Query params:
+  - `status`
+  - `productId`
+  - `customerId`
+  - `minRating`
+  - `maxRating`
+  - `page`
+  - `size`
+  - `sort`
+  - `direction`
+- Response: `ApiResponse<PagedResponse<ReviewResponse>>`
+- Sorting:
+  - Defaults are `page=0`, `size=20`, `sort=createdAt`, `direction=desc`
+
+#### GET `/api/v1/admin/reviews/{id}`
+
+- HTTP: `200 OK`
+- Response: `ApiResponse<ReviewResponse>`
+- Errors:
+  - `404 REVIEW_NOT_FOUND`
+
+#### PATCH `/api/v1/admin/reviews/{id}/status`
+
+- HTTP: `200 OK`
+- Body (`UpdateReviewStatusRequest`):
+  - `status`: required, only `APPROVED` or `REJECTED` are accepted by the service
+  - `adminNote`: optional, max 500
+- Response: `ApiResponse<ReviewResponse>`
+- Errors:
+  - `404 REVIEW_NOT_FOUND`
+  - `409 REVIEW_ALREADY_MODERATED`
+  - `400 BAD_REQUEST` for unsupported target statuses
+  - `422 VALIDATION_ERROR`
+
+Shared review DTO fields:
+- `ReviewResponse`: `id`, `customerId`, `customerName`, `productId`, `productName`, `variantId`, `variantName`, `sku`, `orderItemId`, `rating`, `comment`, `status`, `adminNote`, `moderatedAt`, `moderatedBy`, `createdAt`, `updatedAt`
+
+---
+
+## 14. Notifications
+
+Role:
+- `ADMIN`, `SUPER_ADMIN`
+
+### POST `/api/v1/admin/notifications/broadcast`
+
+- HTTP: `201 Created`
+- Body (`BroadcastNotificationRequest`):
+  - `type`: required
+  - `title`: required, max 255
+  - `message`: required, max 5000
+  - `referenceType`: optional, max 50
+  - `referenceId`: optional, max 100
+  - `customerIds`: optional list; empty or null means all customers
+- Response: `ApiResponse<Map<String, Integer>>`
+  - Data shape: `{ "sent": <count> }`
+- Behavior:
+  - `referenceId` is accepted as a string, but the service parses it to `Long`. Non-numeric values become `null`.
+- Errors:
+  - `422 VALIDATION_ERROR`
+
+---
+
+## 15. Users
+
+Role:
+- `ADMIN` and, via hierarchy, `SUPER_ADMIN`
+
+### POST `/api/v1/admin/users`
+
+- HTTP: `201 Created`
+- Body (`CreateUserRequest`):
+  - `email`: required, valid email, max 255
+  - `password`: required, 8-64 chars, must contain lowercase, uppercase, and digit
+  - `firstName`: required, max 100
+  - `lastName`: optional, max 100
+  - `phoneNumber`: optional, `@PhoneNumber`
+  - `roles`: required non-empty set of `RoleName`
+- Response: `ApiResponse<UserResponse>`
+- `UserResponse` fields:
+  - `id`, `email`, `firstName`, `lastName`, `phoneNumber`, `status`, `roles`, `createdAt`
+- Errors:
+  - `409 EMAIL_ALREADY_EXISTS`
+  - `409 PHONE_ALREADY_EXISTS`
+  - `400 BAD_REQUEST` for unknown role names
+  - `422 VALIDATION_ERROR`
+- Notes:
+  - Despite the controller description, the service currently accepts any seeded `RoleName` value, including `CUSTOMER`, as long as the role exists in the database.
+
+---
+
+## Admin implementation notes
+
+- `POST /api/v1/admin/products`, `POST /api/v1/admin/products/{productId}/variants`, and `POST /api/v1/admin/vouchers` currently return `200 OK`, not `201 Created`.
+- `DELETE /api/v1/admin/promotions/{id}` and `DELETE /api/v1/admin/promotions/{id}/rules/{ruleId}` are annotated as `204 No Content`; clients should treat the body as empty.
+- Unknown product category IDs on admin product create/update are ignored rather than rejected.
+- `ReserveStockRequest.referenceType` and `referenceId` are optional in the real DTO, even though business flows usually populate them.
+- `POST /api/v1/admin/inventories/reserve` returns a JPA entity instead of a dedicated DTO.
+- Both legacy `/api/v1/reviews/...` admin moderation routes and newer `/api/v1/admin/reviews/...` routes are live.

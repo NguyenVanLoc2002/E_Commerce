@@ -4,6 +4,7 @@ import lombok.*;
 
 import java.time.LocalDateTime;
 
+import java.util.UUID;
 @Getter
 @Setter
 @NoArgsConstructor
@@ -11,11 +12,11 @@ import java.time.LocalDateTime;
 @Builder
 public class NotificationResponse {
 
-    private Long id;
+    private UUID id;
     private String type;
     private String title;
     private String body;
-    private Long referenceId;
+    private UUID referenceId;
     private String referenceType;
     private boolean read;
     private LocalDateTime readAt;

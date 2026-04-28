@@ -5,7 +5,8 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;
 
-public interface ShipmentEventRepository extends JpaRepository<ShipmentEvent, Long> {
+import java.util.UUID;
+public interface ShipmentEventRepository extends JpaRepository<ShipmentEvent, UUID> {
 
-    List<ShipmentEvent> findByShipmentIdOrderByEventTimeAsc(Long shipmentId);
+    List<ShipmentEvent> findByShipmentIdOrderByEventTimeAsc(UUID shipmentId);
 }

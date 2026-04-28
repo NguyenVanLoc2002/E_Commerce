@@ -4,6 +4,7 @@ import com.locnguyen.ecommerce.domains.review.enums.ReviewStatus;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 
+import java.util.UUID;
 @Data
 @Schema(description = "Review filter parameters")
 public class ReviewFilter {
@@ -12,10 +13,10 @@ public class ReviewFilter {
     private ReviewStatus status;
 
     @Schema(description = "Filter by product ID")
-    private Long productId;
+    private UUID productId;
 
     @Schema(description = "Filter by customer ID")
-    private Long customerId;
+    private UUID customerId;
 
     @Schema(description = "Minimum rating (1–5)")
     private Integer minRating;

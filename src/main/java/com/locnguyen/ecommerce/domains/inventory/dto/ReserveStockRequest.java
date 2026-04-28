@@ -7,17 +7,18 @@ import lombok.Data;
 
 import java.time.LocalDateTime;
 
+import java.util.UUID;
 @Data
 @Schema(description = "Reserve stock request — hold stock for an order")
 public class ReserveStockRequest {
 
     @NotNull(message = "Variant ID is required")
     @Schema(example = "1", requiredMode = Schema.RequiredMode.REQUIRED)
-    private Long variantId;
+    private UUID variantId;
 
     @NotNull(message = "Warehouse ID is required")
     @Schema(example = "1", requiredMode = Schema.RequiredMode.REQUIRED)
-    private Long warehouseId;
+    private UUID warehouseId;
 
     @NotNull(message = "Quantity is required")
     @Positive(message = "Quantity must be positive")

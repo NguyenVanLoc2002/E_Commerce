@@ -10,6 +10,7 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 
+import java.util.UUID;
 /**
  * Lightweight product representation for list views.
  * Contains computed price range and thumbnail — no variant/media details.
@@ -20,7 +21,7 @@ import java.util.List;
 @Schema(description = "Product list item (no variant details)")
 public class ProductListItemResponse {
 
-    private final Long id;
+    private final UUID id;
     private final String name;
     private final String slug;
     private final String shortDescription;

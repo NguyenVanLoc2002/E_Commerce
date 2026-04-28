@@ -24,6 +24,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
+import java.util.UUID;
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -36,7 +37,7 @@ public class ProductVariantService {
     private final ProductVariantMapper variantMapper;
 
     @Transactional
-    public VariantResponse createVariant(Long productId, CreateVariantRequest request) {
+    public VariantResponse createVariant(UUID productId, CreateVariantRequest request) {
         Product product = productRepository.findById(productId)
                 .orElseThrow(() -> new AppException(ErrorCode.PRODUCT_NOT_FOUND));
 
@@ -70,7 +71,7 @@ public class ProductVariantService {
     }
 
     @Transactional
-    public VariantResponse updateVariant(Long productId, Long variantId, UpdateVariantRequest request) {
+    public VariantResponse updateVariant(UUID productId, UUID variantId, UpdateVariantRequest request) {
         ProductVariant variant = variantRepository.findByIdAndProductId(variantId, productId)
                 .orElseThrow(() -> new AppException(ErrorCode.PRODUCT_VARIANT_NOT_FOUND));
 
@@ -102,7 +103,7 @@ public class ProductVariantService {
     }
 
     @Transactional
-    public void deleteVariant(Long productId, Long variantId) {
+    public void deleteVariant(UUID productId, UUID variantId) {
         ProductVariant variant = variantRepository.findByIdAndProductId(variantId, productId)
                 .orElseThrow(() -> new AppException(ErrorCode.PRODUCT_VARIANT_NOT_FOUND));
         String actor = com.locnguyen.ecommerce.common.utils.SecurityUtils.getCurrentUsernameOrSystem();
@@ -112,7 +113,7 @@ public class ProductVariantService {
     }
 
     @Transactional(readOnly = true)
-    public List<VariantResponse> getVariantsByProduct(Long productId) {
+    public List<VariantResponse> getVariantsByProduct(UUID productId) {
         return variantRepository.findByProductIdOrderByCreatedAtAsc(productId)
                 .stream().map(variantMapper::toResponse).toList();
     }

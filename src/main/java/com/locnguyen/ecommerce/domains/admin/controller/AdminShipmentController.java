@@ -16,6 +16,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.UUID;
 @Tag(name = "Admin — Shipments", description = "Shipment management and tracking (admin only)")
 @RestController
 @RequiredArgsConstructor
@@ -38,13 +39,13 @@ public class AdminShipmentController {
 
     @Operation(summary = "Get a shipment by ID")
     @GetMapping("/{id}")
-    public ApiResponse<ShipmentResponse> getById(@PathVariable Long id) {
+    public ApiResponse<ShipmentResponse> getById(@PathVariable UUID id) {
         return ApiResponse.success(shipmentService.getById(id));
     }
 
     @Operation(summary = "Get a shipment by order ID")
     @GetMapping("/order/{orderId}")
-    public ApiResponse<ShipmentResponse> getByOrderId(@PathVariable Long orderId) {
+    public ApiResponse<ShipmentResponse> getByOrderId(@PathVariable UUID orderId) {
         return ApiResponse.success(shipmentService.getByOrderId(orderId));
     }
 
@@ -59,7 +60,7 @@ public class AdminShipmentController {
     @Operation(summary = "Update shipment details (carrier, tracking number, dates, note)")
     @PatchMapping("/{id}")
     public ApiResponse<ShipmentResponse> update(
-            @PathVariable Long id,
+            @PathVariable UUID id,
             @Valid @RequestBody UpdateShipmentRequest request) {
         return ApiResponse.success(shipmentService.updateShipment(id, request));
     }
@@ -70,7 +71,7 @@ public class AdminShipmentController {
     )
     @PatchMapping("/{id}/status")
     public ApiResponse<ShipmentResponse> updateStatus(
-            @PathVariable Long id,
+            @PathVariable UUID id,
             @Valid @RequestBody UpdateShipmentStatusRequest request) {
         return ApiResponse.success(shipmentService.updateStatus(id, request));
     }

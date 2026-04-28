@@ -7,13 +7,14 @@ import lombok.Getter;
 
 import java.math.BigDecimal;
 
+import java.util.UUID;
 @Getter
 @Builder
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @Schema(description = "A single line item in the invoice")
 public class InvoiceItemResponse {
 
-    private final Long variantId;
+    private final UUID variantId;
     private final String productName;
     private final String variantName;
     private final String sku;

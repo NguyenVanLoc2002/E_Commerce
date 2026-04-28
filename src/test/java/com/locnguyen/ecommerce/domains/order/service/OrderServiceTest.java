@@ -51,6 +51,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
+import java.util.UUID;
 /**
  * Unit tests for {@link OrderService}.
  *
@@ -63,6 +64,8 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
 class OrderServiceTest {
+
+    private static UUID uuid(long n) { return new UUID(0L, n); }
 
     @Mock OrderRepository orderRepository;
     @Mock OrderItemRepository orderItemRepository;
@@ -80,13 +83,13 @@ class OrderServiceTest {
 
     // ─── factories ───────────────────────────────────────────────────────────
 
-    private Customer customer(long id) {
+    private Customer customer(UUID id) {
         Customer c = mock(Customer.class);
         when(c.getId()).thenReturn(id);
         return c;
     }
 
-    private Cart activeCart(long cartId, Customer customer) {
+    private Cart activeCart(UUID cartId, Customer customer) {
         Cart cart = new Cart();
         setId(cart, cartId);
         cart.setCustomer(customer);
@@ -95,7 +98,7 @@ class OrderServiceTest {
         return cart;
     }
 
-    private Address address(long id, Customer owner) {
+    private Address address(UUID id, Customer owner) {
         Address a = new Address();
         setId(a, id);
         a.setCustomer(owner);
@@ -109,7 +112,7 @@ class OrderServiceTest {
         return a;
     }
 
-    private ProductVariant variant(long id, BigDecimal basePrice, BigDecimal salePrice) {
+    private ProductVariant variant(UUID id, BigDecimal basePrice, BigDecimal salePrice) {
         Product product = new Product();
         ReflectionTestUtils.setField(product, "name", "Test Product");
 
@@ -125,16 +128,16 @@ class OrderServiceTest {
 
     private CartItem cartItem(Cart cart, ProductVariant variant, int quantity) {
         CartItem ci = new CartItem();
-        setId(ci, 100L + variant.getId());
+        setId(ci, UUID.randomUUID());
         ci.setCart(cart);
         ci.setVariant(variant);
         ci.setQuantity(quantity);
         return ci;
     }
 
-    private Inventory inventory(long id, ProductVariant variant, int onHand, int reserved) {
+    private Inventory inventory(UUID id, ProductVariant variant, int onHand, int reserved) {
         Warehouse warehouse = new Warehouse();
-        setId(warehouse, 1L);
+        setId(warehouse, uuid(1));
 
         Inventory inv = new Inventory();
         setId(inv, id);
@@ -145,7 +148,7 @@ class OrderServiceTest {
         return inv;
     }
 
-    private Order savedOrder(long id, Customer customer, OrderStatus status,
+    private Order savedOrder(UUID id, Customer customer, OrderStatus status,
                               PaymentMethod paymentMethod, BigDecimal total) {
         Order order = new Order();
         setId(order, id);
@@ -162,14 +165,14 @@ class OrderServiceTest {
         return order;
     }
 
-    private CreateOrderRequest createRequest(Long addressId, String paymentMethod) {
+    private CreateOrderRequest createRequest(UUID addressId, String paymentMethod) {
         CreateOrderRequest req = new CreateOrderRequest();
         req.setShippingAddressId(addressId);
         req.setPaymentMethod(paymentMethod == null ? null : PaymentMethod.valueOf(paymentMethod));
         return req;
     }
 
-    private static void setId(Object entity, Long id) {
+    private static void setId(Object entity, UUID id) {
         ReflectionTestUtils.setField(entity, "id", id);
     }
 
@@ -180,7 +183,7 @@ class OrderServiceTest {
         // orderRepository.save() returns whatever order is passed in (adds an id)
         when(orderRepository.save(any(Order.class))).thenAnswer(inv -> {
             Order o = inv.getArgument(0);
-            if (o.getId() == null) setId(o, 99L);
+            if (o.getId() == null) setId(o, uuid(99));
             return o;
         });
         when(cartRepository.save(any(Cart.class))).thenAnswer(inv -> inv.getArgument(0));
@@ -193,11 +196,11 @@ class OrderServiceTest {
 
         @Test
         void throws_CART_NOT_FOUND_when_no_active_cart() {
-            Customer cust = customer(1L);
-            when(cartRepository.findByCustomerIdAndStatus(1L, CartStatus.ACTIVE))
+            Customer cust = customer(uuid(1));
+            when(cartRepository.findByCustomerIdAndStatus(uuid(1), CartStatus.ACTIVE))
                     .thenReturn(Optional.empty());
 
-            assertThatThrownBy(() -> orderService.createOrder(cust, createRequest(10L, null)))
+            assertThatThrownBy(() -> orderService.createOrder(cust, createRequest(uuid(10), null)))
                     .isInstanceOf(AppException.class)
                     .extracting(e -> ((AppException) e).getErrorCode())
                     .isEqualTo(ErrorCode.CART_NOT_FOUND);
@@ -205,13 +208,13 @@ class OrderServiceTest {
 
         @Test
         void throws_ORDER_EMPTY_when_cart_has_no_items() {
-            Customer cust = customer(1L);
-            Cart cart = activeCart(5L, cust);
-            when(cartRepository.findByCustomerIdAndStatus(1L, CartStatus.ACTIVE))
+            Customer cust = customer(uuid(1));
+            Cart cart = activeCart(uuid(5), cust);
+            when(cartRepository.findByCustomerIdAndStatus(uuid(1), CartStatus.ACTIVE))
                     .thenReturn(Optional.of(cart));
-            when(cartItemRepository.findByCartIdOrderByCreatedAtAsc(5L)).thenReturn(List.of());
+            when(cartItemRepository.findByCartIdOrderByCreatedAtAsc(uuid(5))).thenReturn(List.of());
 
-            assertThatThrownBy(() -> orderService.createOrder(cust, createRequest(10L, null)))
+            assertThatThrownBy(() -> orderService.createOrder(cust, createRequest(uuid(10), null)))
                     .isInstanceOf(AppException.class)
                     .extracting(e -> ((AppException) e).getErrorCode())
                     .isEqualTo(ErrorCode.ORDER_EMPTY);
@@ -219,17 +222,17 @@ class OrderServiceTest {
 
         @Test
         void throws_ADDRESS_NOT_FOUND_when_address_missing() {
-            Customer cust = customer(1L);
-            Cart cart = activeCart(5L, cust);
-            ProductVariant v = variant(1L, new BigDecimal("100000"), null);
+            Customer cust = customer(uuid(1));
+            Cart cart = activeCart(uuid(5), cust);
+            ProductVariant v = variant(uuid(1), new BigDecimal("100000"), null);
             CartItem ci = cartItem(cart, v, 2);
 
-            when(cartRepository.findByCustomerIdAndStatus(1L, CartStatus.ACTIVE))
+            when(cartRepository.findByCustomerIdAndStatus(uuid(1), CartStatus.ACTIVE))
                     .thenReturn(Optional.of(cart));
-            when(cartItemRepository.findByCartIdOrderByCreatedAtAsc(5L)).thenReturn(List.of(ci));
-            when(addressRepository.findById(99L)).thenReturn(Optional.empty());
+            when(cartItemRepository.findByCartIdOrderByCreatedAtAsc(uuid(5))).thenReturn(List.of(ci));
+            when(addressRepository.findById(uuid(99))).thenReturn(Optional.empty());
 
-            assertThatThrownBy(() -> orderService.createOrder(cust, createRequest(99L, null)))
+            assertThatThrownBy(() -> orderService.createOrder(cust, createRequest(uuid(99), null)))
                     .isInstanceOf(AppException.class)
                     .extracting(e -> ((AppException) e).getErrorCode())
                     .isEqualTo(ErrorCode.ADDRESS_NOT_FOUND);
@@ -237,19 +240,19 @@ class OrderServiceTest {
 
         @Test
         void throws_ADDRESS_NOT_FOUND_when_address_belongs_to_another_customer() {
-            Customer cust = customer(1L);
-            Customer otherCustomer = customer(999L);
-            Cart cart = activeCart(5L, cust);
-            ProductVariant v = variant(1L, new BigDecimal("100000"), null);
+            Customer cust = customer(uuid(1));
+            Customer otherCustomer = customer(uuid(999));
+            Cart cart = activeCart(uuid(5), cust);
+            ProductVariant v = variant(uuid(1), new BigDecimal("100000"), null);
             CartItem ci = cartItem(cart, v, 2);
-            Address addr = address(10L, otherCustomer);  // different owner
+            Address addr = address(uuid(10), otherCustomer);  // different owner
 
-            when(cartRepository.findByCustomerIdAndStatus(1L, CartStatus.ACTIVE))
+            when(cartRepository.findByCustomerIdAndStatus(uuid(1), CartStatus.ACTIVE))
                     .thenReturn(Optional.of(cart));
-            when(cartItemRepository.findByCartIdOrderByCreatedAtAsc(5L)).thenReturn(List.of(ci));
-            when(addressRepository.findById(10L)).thenReturn(Optional.of(addr));
+            when(cartItemRepository.findByCartIdOrderByCreatedAtAsc(uuid(5))).thenReturn(List.of(ci));
+            when(addressRepository.findById(uuid(10))).thenReturn(Optional.of(addr));
 
-            assertThatThrownBy(() -> orderService.createOrder(cust, createRequest(10L, null)))
+            assertThatThrownBy(() -> orderService.createOrder(cust, createRequest(uuid(10), null)))
                     .isInstanceOf(AppException.class)
                     .extracting(e -> ((AppException) e).getErrorCode())
                     .isEqualTo(ErrorCode.ADDRESS_NOT_FOUND);
@@ -257,19 +260,19 @@ class OrderServiceTest {
 
         @Test
         void throws_INVENTORY_NOT_FOUND_when_no_inventory_for_variant() {
-            Customer cust = customer(1L);
-            Cart cart = activeCart(5L, cust);
-            ProductVariant v = variant(1L, new BigDecimal("100000"), null);
+            Customer cust = customer(uuid(1));
+            Cart cart = activeCart(uuid(5), cust);
+            ProductVariant v = variant(uuid(1), new BigDecimal("100000"), null);
             CartItem ci = cartItem(cart, v, 2);
-            Address addr = address(10L, cust);
+            Address addr = address(uuid(10), cust);
 
-            when(cartRepository.findByCustomerIdAndStatus(1L, CartStatus.ACTIVE))
+            when(cartRepository.findByCustomerIdAndStatus(uuid(1), CartStatus.ACTIVE))
                     .thenReturn(Optional.of(cart));
-            when(cartItemRepository.findByCartIdOrderByCreatedAtAsc(5L)).thenReturn(List.of(ci));
-            when(addressRepository.findById(10L)).thenReturn(Optional.of(addr));
-            when(inventoryRepository.findByVariantIdIn(List.of(1L))).thenReturn(List.of());
+            when(cartItemRepository.findByCartIdOrderByCreatedAtAsc(uuid(5))).thenReturn(List.of(ci));
+            when(addressRepository.findById(uuid(10))).thenReturn(Optional.of(addr));
+            when(inventoryRepository.findByVariantIdIn(List.of(uuid(1)))).thenReturn(List.of());
 
-            assertThatThrownBy(() -> orderService.createOrder(cust, createRequest(10L, null)))
+            assertThatThrownBy(() -> orderService.createOrder(cust, createRequest(uuid(10), null)))
                     .isInstanceOf(AppException.class)
                     .extracting(e -> ((AppException) e).getErrorCode())
                     .isEqualTo(ErrorCode.INVENTORY_NOT_FOUND);
@@ -277,16 +280,16 @@ class OrderServiceTest {
 
         @Test
         void cod_order_starts_in_PENDING_status() {
-            Customer cust = customer(1L);
-            Cart cart = activeCart(5L, cust);
-            ProductVariant v = variant(1L, new BigDecimal("100000"), null);
+            Customer cust = customer(uuid(1));
+            Cart cart = activeCart(uuid(5), cust);
+            ProductVariant v = variant(uuid(1), new BigDecimal("100000"), null);
             CartItem ci = cartItem(cart, v, 1);
-            Address addr = address(10L, cust);
-            Inventory inv = inventory(20L, v, 10, 0);
+            Address addr = address(uuid(10), cust);
+            Inventory inv = inventory(uuid(20), v, 10, 0);
 
             stubSuccessfulCreateOrder(cust, cart, List.of(ci), addr, List.of(inv));
 
-            orderService.createOrder(cust, createRequest(10L, "COD"));
+            orderService.createOrder(cust, createRequest(uuid(10), "COD"));
 
             ArgumentCaptor<Order> captor = ArgumentCaptor.forClass(Order.class);
             verify(orderRepository).save(captor.capture());
@@ -296,16 +299,16 @@ class OrderServiceTest {
 
         @Test
         void online_order_starts_in_AWAITING_PAYMENT_status() {
-            Customer cust = customer(1L);
-            Cart cart = activeCart(5L, cust);
-            ProductVariant v = variant(1L, new BigDecimal("100000"), null);
+            Customer cust = customer(uuid(1));
+            Cart cart = activeCart(uuid(5), cust);
+            ProductVariant v = variant(uuid(1), new BigDecimal("100000"), null);
             CartItem ci = cartItem(cart, v, 1);
-            Address addr = address(10L, cust);
-            Inventory inv = inventory(20L, v, 10, 0);
+            Address addr = address(uuid(10), cust);
+            Inventory inv = inventory(uuid(20), v, 10, 0);
 
             stubSuccessfulCreateOrder(cust, cart, List.of(ci), addr, List.of(inv));
 
-            orderService.createOrder(cust, createRequest(10L, "ONLINE"));
+            orderService.createOrder(cust, createRequest(uuid(10), "ONLINE"));
 
             ArgumentCaptor<Order> captor = ArgumentCaptor.forClass(Order.class);
             verify(orderRepository).save(captor.capture());
@@ -315,48 +318,48 @@ class OrderServiceTest {
 
         @Test
         void cod_order_creates_cod_payment_record() {
-            Customer cust = customer(1L);
-            Cart cart = activeCart(5L, cust);
-            ProductVariant v = variant(1L, new BigDecimal("100000"), null);
+            Customer cust = customer(uuid(1));
+            Cart cart = activeCart(uuid(5), cust);
+            ProductVariant v = variant(uuid(1), new BigDecimal("100000"), null);
             CartItem ci = cartItem(cart, v, 1);
-            Address addr = address(10L, cust);
-            Inventory inv = inventory(20L, v, 10, 0);
+            Address addr = address(uuid(10), cust);
+            Inventory inv = inventory(uuid(20), v, 10, 0);
 
             stubSuccessfulCreateOrder(cust, cart, List.of(ci), addr, List.of(inv));
 
-            orderService.createOrder(cust, createRequest(10L, "COD"));
+            orderService.createOrder(cust, createRequest(uuid(10), "COD"));
 
             verify(paymentService).createCodPayment(any(Order.class));
         }
 
         @Test
         void online_order_does_NOT_create_cod_payment() {
-            Customer cust = customer(1L);
-            Cart cart = activeCart(5L, cust);
-            ProductVariant v = variant(1L, new BigDecimal("100000"), null);
+            Customer cust = customer(uuid(1));
+            Cart cart = activeCart(uuid(5), cust);
+            ProductVariant v = variant(uuid(1), new BigDecimal("100000"), null);
             CartItem ci = cartItem(cart, v, 1);
-            Address addr = address(10L, cust);
-            Inventory inv = inventory(20L, v, 10, 0);
+            Address addr = address(uuid(10), cust);
+            Inventory inv = inventory(uuid(20), v, 10, 0);
 
             stubSuccessfulCreateOrder(cust, cart, List.of(ci), addr, List.of(inv));
 
-            orderService.createOrder(cust, createRequest(10L, "ONLINE"));
+            orderService.createOrder(cust, createRequest(uuid(10), "ONLINE"));
 
             verify(paymentService, never()).createCodPayment(any());
         }
 
         @Test
         void cart_is_marked_CHECKED_OUT_after_order_creation() {
-            Customer cust = customer(1L);
-            Cart cart = activeCart(5L, cust);
-            ProductVariant v = variant(1L, new BigDecimal("100000"), null);
+            Customer cust = customer(uuid(1));
+            Cart cart = activeCart(uuid(5), cust);
+            ProductVariant v = variant(uuid(1), new BigDecimal("100000"), null);
             CartItem ci = cartItem(cart, v, 1);
-            Address addr = address(10L, cust);
-            Inventory inv = inventory(20L, v, 10, 0);
+            Address addr = address(uuid(10), cust);
+            Inventory inv = inventory(uuid(20), v, 10, 0);
 
             stubSuccessfulCreateOrder(cust, cart, List.of(ci), addr, List.of(inv));
 
-            orderService.createOrder(cust, createRequest(10L, "COD"));
+            orderService.createOrder(cust, createRequest(uuid(10), "COD"));
 
             verify(cartRepository).save(argThat(c -> c.getStatus() == CartStatus.CHECKED_OUT));
         }
@@ -365,16 +368,16 @@ class OrderServiceTest {
         void subTotal_uses_salePrice_when_set() {
             // Variant has basePrice=200,000 and salePrice=150,000
             // Expected subTotal = 150,000 * 2 = 300,000
-            Customer cust = customer(1L);
-            Cart cart = activeCart(5L, cust);
-            ProductVariant v = variant(1L, new BigDecimal("200000"), new BigDecimal("150000"));
+            Customer cust = customer(uuid(1));
+            Cart cart = activeCart(uuid(5), cust);
+            ProductVariant v = variant(uuid(1), new BigDecimal("200000"), new BigDecimal("150000"));
             CartItem ci = cartItem(cart, v, 2);
-            Address addr = address(10L, cust);
-            Inventory inv = inventory(20L, v, 10, 0);
+            Address addr = address(uuid(10), cust);
+            Inventory inv = inventory(uuid(20), v, 10, 0);
 
             stubSuccessfulCreateOrder(cust, cart, List.of(ci), addr, List.of(inv));
 
-            orderService.createOrder(cust, createRequest(10L, "COD"));
+            orderService.createOrder(cust, createRequest(uuid(10), "COD"));
 
             ArgumentCaptor<Order> captor = ArgumentCaptor.forClass(Order.class);
             verify(orderRepository).save(captor.capture());
@@ -385,16 +388,16 @@ class OrderServiceTest {
         @Test
         void subTotal_uses_basePrice_when_salePrice_is_null() {
             // Variant has basePrice=100,000 and no salePrice
-            Customer cust = customer(1L);
-            Cart cart = activeCart(5L, cust);
-            ProductVariant v = variant(1L, new BigDecimal("100000"), null);
+            Customer cust = customer(uuid(1));
+            Cart cart = activeCart(uuid(5), cust);
+            ProductVariant v = variant(uuid(1), new BigDecimal("100000"), null);
             CartItem ci = cartItem(cart, v, 3);
-            Address addr = address(10L, cust);
-            Inventory inv = inventory(20L, v, 10, 0);
+            Address addr = address(uuid(10), cust);
+            Inventory inv = inventory(uuid(20), v, 10, 0);
 
             stubSuccessfulCreateOrder(cust, cart, List.of(ci), addr, List.of(inv));
 
-            orderService.createOrder(cust, createRequest(10L, "COD"));
+            orderService.createOrder(cust, createRequest(uuid(10), "COD"));
 
             ArgumentCaptor<Order> captor = ArgumentCaptor.forClass(Order.class);
             verify(orderRepository).save(captor.capture());
@@ -403,16 +406,16 @@ class OrderServiceTest {
 
         @Test
         void shipping_address_fields_are_snapshotted_from_address_entity() {
-            Customer cust = customer(1L);
-            Cart cart = activeCart(5L, cust);
-            ProductVariant v = variant(1L, new BigDecimal("100000"), null);
+            Customer cust = customer(uuid(1));
+            Cart cart = activeCart(uuid(5), cust);
+            ProductVariant v = variant(uuid(1), new BigDecimal("100000"), null);
             CartItem ci = cartItem(cart, v, 1);
-            Address addr = address(10L, cust);  // fields set in factory
-            Inventory inv = inventory(20L, v, 5, 0);
+            Address addr = address(uuid(10), cust);  // fields set in factory
+            Inventory inv = inventory(uuid(20), v, 5, 0);
 
             stubSuccessfulCreateOrder(cust, cart, List.of(ci), addr, List.of(inv));
 
-            orderService.createOrder(cust, createRequest(10L, "COD"));
+            orderService.createOrder(cust, createRequest(uuid(10), "COD"));
 
             ArgumentCaptor<Order> captor = ArgumentCaptor.forClass(Order.class);
             verify(orderRepository).save(captor.capture());
@@ -424,51 +427,51 @@ class OrderServiceTest {
 
         @Test
         void picks_warehouse_with_most_available_stock() {
-            Customer cust = customer(1L);
-            Cart cart = activeCart(5L, cust);
-            ProductVariant v = variant(1L, new BigDecimal("100000"), null);
+            Customer cust = customer(uuid(1));
+            Cart cart = activeCart(uuid(5), cust);
+            ProductVariant v = variant(uuid(1), new BigDecimal("100000"), null);
             CartItem ci = cartItem(cart, v, 1);
-            Address addr = address(10L, cust);
+            Address addr = address(uuid(10), cust);
 
             // Warehouse A: onHand=5, reserved=3 → available=2
-            Inventory invA = inventory(20L, v, 5, 3);
-            setId(invA.getWarehouse(), 1L);
+            Inventory invA = inventory(uuid(20), v, 5, 3);
+            setId(invA.getWarehouse(), uuid(1));
 
             // Warehouse B: onHand=20, reserved=2 → available=18 ← best
-            Inventory invB = inventory(21L, v, 20, 2);
-            setId(invB.getWarehouse(), 2L);
+            Inventory invB = inventory(uuid(21), v, 20, 2);
+            setId(invB.getWarehouse(), uuid(2));
 
             stubSuccessfulCreateOrder(cust, cart, List.of(ci), addr, List.of(invA, invB));
 
-            orderService.createOrder(cust, createRequest(10L, "COD"));
+            orderService.createOrder(cust, createRequest(uuid(10), "COD"));
 
             // Should reserve from warehouse 2 (available=18 > available=2)
-            verify(inventoryService).reserveStock(argThat(req -> req.getWarehouseId() == 2L));
+            verify(inventoryService).reserveStock(argThat(req -> req.getWarehouseId() == uuid(2)));
         }
 
         @Test
         void reserve_is_called_once_per_cart_item() {
-            Customer cust = customer(1L);
-            Cart cart = activeCart(5L, cust);
-            ProductVariant v1 = variant(1L, new BigDecimal("100000"), null);
-            ProductVariant v2 = variant(2L, new BigDecimal("200000"), null);
+            Customer cust = customer(uuid(1));
+            Cart cart = activeCart(uuid(5), cust);
+            ProductVariant v1 = variant(uuid(1), new BigDecimal("100000"), null);
+            ProductVariant v2 = variant(uuid(2), new BigDecimal("200000"), null);
             CartItem ci1 = cartItem(cart, v1, 1);
             CartItem ci2 = cartItem(cart, v2, 2);
-            Address addr = address(10L, cust);
-            Inventory inv1 = inventory(20L, v1, 10, 0);
-            Inventory inv2 = inventory(21L, v2, 10, 0);
+            Address addr = address(uuid(10), cust);
+            Inventory inv1 = inventory(uuid(20), v1, 10, 0);
+            Inventory inv2 = inventory(uuid(21), v2, 10, 0);
 
-            when(cartRepository.findByCustomerIdAndStatus(1L, CartStatus.ACTIVE))
+            when(cartRepository.findByCustomerIdAndStatus(uuid(1), CartStatus.ACTIVE))
                     .thenReturn(Optional.of(cart));
-            when(cartItemRepository.findByCartIdOrderByCreatedAtAsc(5L))
+            when(cartItemRepository.findByCartIdOrderByCreatedAtAsc(uuid(5)))
                     .thenReturn(List.of(ci1, ci2));
-            when(addressRepository.findById(10L)).thenReturn(Optional.of(addr));
-            when(inventoryRepository.findByVariantIdIn(List.of(1L, 2L)))
+            when(addressRepository.findById(uuid(10))).thenReturn(Optional.of(addr));
+            when(inventoryRepository.findByVariantIdIn(List.of(uuid(1), uuid(2))))
                     .thenReturn(List.of(inv1, inv2));
-            when(orderItemRepository.findByOrderIdOrderByCreatedAtAsc(anyLong()))
+            when(orderItemRepository.findByOrderIdOrderByCreatedAtAsc(any(UUID.class)))
                     .thenReturn(List.of());
 
-            orderService.createOrder(cust, createRequest(10L, "COD"));
+            orderService.createOrder(cust, createRequest(uuid(10), "COD"));
 
             verify(inventoryService, times(2)).reserveStock(any());
         }
@@ -481,11 +484,11 @@ class OrderServiceTest {
             when(cartItemRepository.findByCartIdOrderByCreatedAtAsc(cart.getId()))
                     .thenReturn(items);
             when(addressRepository.findById(addr.getId())).thenReturn(Optional.of(addr));
-            List<Long> variantIds = items.stream()
+            List<UUID> variantIds = items.stream()
                     .map(ci -> ci.getVariant().getId())
                     .toList();
             when(inventoryRepository.findByVariantIdIn(variantIds)).thenReturn(inventories);
-            when(orderItemRepository.findByOrderIdOrderByCreatedAtAsc(anyLong()))
+            when(orderItemRepository.findByOrderIdOrderByCreatedAtAsc(any(UUID.class)))
                     .thenReturn(List.of());
         }
     }
@@ -497,9 +500,9 @@ class OrderServiceTest {
 
         @Test
         void throws_ORDER_NOT_FOUND_when_order_does_not_exist() {
-            when(orderRepository.findById(99L)).thenReturn(Optional.empty());
+            when(orderRepository.findById(uuid(99))).thenReturn(Optional.empty());
 
-            assertThatThrownBy(() -> orderService.confirmOrder(99L))
+            assertThatThrownBy(() -> orderService.confirmOrder(uuid(99)))
                     .isInstanceOf(AppException.class)
                     .extracting(e -> ((AppException) e).getErrorCode())
                     .isEqualTo(ErrorCode.ORDER_NOT_FOUND);
@@ -507,12 +510,12 @@ class OrderServiceTest {
 
         @Test
         void throws_ORDER_STATUS_INVALID_when_order_is_already_PROCESSING() {
-            Customer cust = customer(1L);
-            Order order = savedOrder(1L, cust, OrderStatus.PROCESSING, PaymentMethod.COD,
+            Customer cust = customer(uuid(1));
+            Order order = savedOrder(uuid(1), cust, OrderStatus.PROCESSING, PaymentMethod.COD,
                     new BigDecimal("100000"));
-            when(orderRepository.findById(1L)).thenReturn(Optional.of(order));
+            when(orderRepository.findById(uuid(1))).thenReturn(Optional.of(order));
 
-            assertThatThrownBy(() -> orderService.confirmOrder(1L))
+            assertThatThrownBy(() -> orderService.confirmOrder(uuid(1)))
                     .isInstanceOf(AppException.class)
                     .extracting(e -> ((AppException) e).getErrorCode())
                     .isEqualTo(ErrorCode.ORDER_STATUS_INVALID);
@@ -520,13 +523,13 @@ class OrderServiceTest {
 
         @Test
         void throws_ORDER_STATUS_INVALID_when_online_payment_not_paid() {
-            Customer cust = customer(1L);
-            Order order = savedOrder(1L, cust, OrderStatus.AWAITING_PAYMENT,
+            Customer cust = customer(uuid(1));
+            Order order = savedOrder(uuid(1), cust, OrderStatus.AWAITING_PAYMENT,
                     PaymentMethod.ONLINE, new BigDecimal("100000"));
             order.setPaymentStatus(PaymentStatus.PENDING);  // not PAID yet
-            when(orderRepository.findById(1L)).thenReturn(Optional.of(order));
+            when(orderRepository.findById(uuid(1))).thenReturn(Optional.of(order));
 
-            assertThatThrownBy(() -> orderService.confirmOrder(1L))
+            assertThatThrownBy(() -> orderService.confirmOrder(uuid(1)))
                     .isInstanceOf(AppException.class)
                     .extracting(e -> ((AppException) e).getErrorCode())
                     .isEqualTo(ErrorCode.ORDER_STATUS_INVALID);
@@ -536,12 +539,12 @@ class OrderServiceTest {
         void throws_ORDER_STATUS_INVALID_when_COD_order_is_in_PENDING_state() {
             // State machine: PENDING → {AWAITING_PAYMENT, CANCELLED}
             // PENDING → CONFIRMED is NOT a valid transition; COD must go through AWAITING_PAYMENT first
-            Customer cust = customer(1L);
-            Order order = savedOrder(1L, cust, OrderStatus.PENDING, PaymentMethod.COD,
+            Customer cust = customer(uuid(1));
+            Order order = savedOrder(uuid(1), cust, OrderStatus.PENDING, PaymentMethod.COD,
                     new BigDecimal("100000"));
-            when(orderRepository.findById(1L)).thenReturn(Optional.of(order));
+            when(orderRepository.findById(uuid(1))).thenReturn(Optional.of(order));
 
-            assertThatThrownBy(() -> orderService.confirmOrder(1L))
+            assertThatThrownBy(() -> orderService.confirmOrder(uuid(1)))
                     .isInstanceOf(AppException.class)
                     .extracting(e -> ((AppException) e).getErrorCode())
                     .isEqualTo(ErrorCode.ORDER_STATUS_INVALID);
@@ -549,15 +552,15 @@ class OrderServiceTest {
 
         @Test
         void cod_AWAITING_PAYMENT_order_can_be_confirmed_without_payment_status_check() {
-            Customer cust = customer(1L);
-            Order order = savedOrder(1L, cust, OrderStatus.AWAITING_PAYMENT, PaymentMethod.COD,
+            Customer cust = customer(uuid(1));
+            Order order = savedOrder(uuid(1), cust, OrderStatus.AWAITING_PAYMENT, PaymentMethod.COD,
                     new BigDecimal("100000"));
             order.setPaymentStatus(PaymentStatus.PENDING);  // COD — not paid yet, but still confirming
-            when(orderRepository.findById(1L)).thenReturn(Optional.of(order));
+            when(orderRepository.findById(uuid(1))).thenReturn(Optional.of(order));
             when(orderRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
-            when(orderItemRepository.findByOrderIdOrderByCreatedAtAsc(anyLong())).thenReturn(List.of());
+            when(orderItemRepository.findByOrderIdOrderByCreatedAtAsc(any(UUID.class))).thenReturn(List.of());
 
-            orderService.confirmOrder(1L);
+            orderService.confirmOrder(uuid(1));
 
             ArgumentCaptor<Order> captor = ArgumentCaptor.forClass(Order.class);
             verify(orderRepository).save(captor.capture());
@@ -566,15 +569,15 @@ class OrderServiceTest {
 
         @Test
         void online_order_can_be_confirmed_when_payment_is_PAID() {
-            Customer cust = customer(1L);
-            Order order = savedOrder(1L, cust, OrderStatus.AWAITING_PAYMENT,
+            Customer cust = customer(uuid(1));
+            Order order = savedOrder(uuid(1), cust, OrderStatus.AWAITING_PAYMENT,
                     PaymentMethod.ONLINE, new BigDecimal("100000"));
             order.setPaymentStatus(PaymentStatus.PAID);
-            when(orderRepository.findById(1L)).thenReturn(Optional.of(order));
+            when(orderRepository.findById(uuid(1))).thenReturn(Optional.of(order));
             when(orderRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
-            when(orderItemRepository.findByOrderIdOrderByCreatedAtAsc(anyLong())).thenReturn(List.of());
+            when(orderItemRepository.findByOrderIdOrderByCreatedAtAsc(any(UUID.class))).thenReturn(List.of());
 
-            orderService.confirmOrder(1L);
+            orderService.confirmOrder(uuid(1));
 
             ArgumentCaptor<Order> captor = ArgumentCaptor.forClass(Order.class);
             verify(orderRepository).save(captor.capture());
@@ -589,14 +592,14 @@ class OrderServiceTest {
 
         @Test
         void admin_can_cancel_CONFIRMED_order() {
-            Customer cust = customer(1L);
-            Order order = savedOrder(1L, cust, OrderStatus.CONFIRMED, PaymentMethod.COD,
+            Customer cust = customer(uuid(1));
+            Order order = savedOrder(uuid(1), cust, OrderStatus.CONFIRMED, PaymentMethod.COD,
                     new BigDecimal("100000"));
-            when(orderRepository.findById(1L)).thenReturn(Optional.of(order));
+            when(orderRepository.findById(uuid(1))).thenReturn(Optional.of(order));
             when(orderRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
-            when(orderItemRepository.findByOrderIdOrderByCreatedAtAsc(anyLong())).thenReturn(List.of());
+            when(orderItemRepository.findByOrderIdOrderByCreatedAtAsc(any(UUID.class))).thenReturn(List.of());
 
-            orderService.cancelOrder(1L);
+            orderService.cancelOrder(uuid(1));
 
             verify(orderRepository).save(argThat(o -> o.getStatus() == OrderStatus.CANCELLED));
             verify(inventoryService).releaseStock("ORDER", order.getOrderCode());
@@ -604,12 +607,12 @@ class OrderServiceTest {
 
         @Test
         void throws_ORDER_CANNOT_CANCEL_when_order_is_SHIPPED() {
-            Customer cust = customer(1L);
-            Order order = savedOrder(1L, cust, OrderStatus.SHIPPED, PaymentMethod.COD,
+            Customer cust = customer(uuid(1));
+            Order order = savedOrder(uuid(1), cust, OrderStatus.SHIPPED, PaymentMethod.COD,
                     new BigDecimal("100000"));
-            when(orderRepository.findById(1L)).thenReturn(Optional.of(order));
+            when(orderRepository.findById(uuid(1))).thenReturn(Optional.of(order));
 
-            assertThatThrownBy(() -> orderService.cancelOrder(1L))
+            assertThatThrownBy(() -> orderService.cancelOrder(uuid(1)))
                     .isInstanceOf(AppException.class)
                     .extracting(e -> ((AppException) e).getErrorCode())
                     .isEqualTo(ErrorCode.ORDER_CANNOT_CANCEL);
@@ -617,12 +620,12 @@ class OrderServiceTest {
 
         @Test
         void throws_ORDER_CANNOT_CANCEL_when_order_is_already_CANCELLED() {
-            Customer cust = customer(1L);
-            Order order = savedOrder(1L, cust, OrderStatus.CANCELLED, PaymentMethod.COD,
+            Customer cust = customer(uuid(1));
+            Order order = savedOrder(uuid(1), cust, OrderStatus.CANCELLED, PaymentMethod.COD,
                     new BigDecimal("100000"));
-            when(orderRepository.findById(1L)).thenReturn(Optional.of(order));
+            when(orderRepository.findById(uuid(1))).thenReturn(Optional.of(order));
 
-            assertThatThrownBy(() -> orderService.cancelOrder(1L))
+            assertThatThrownBy(() -> orderService.cancelOrder(uuid(1)))
                     .isInstanceOf(AppException.class)
                     .extracting(e -> ((AppException) e).getErrorCode())
                     .isEqualTo(ErrorCode.ORDER_CANNOT_CANCEL);
@@ -630,14 +633,14 @@ class OrderServiceTest {
 
         @Test
         void releasing_stock_is_called_on_successful_cancel() {
-            Customer cust = customer(1L);
-            Order order = savedOrder(1L, cust, OrderStatus.PENDING, PaymentMethod.COD,
+            Customer cust = customer(uuid(1));
+            Order order = savedOrder(uuid(1), cust, OrderStatus.PENDING, PaymentMethod.COD,
                     new BigDecimal("100000"));
-            when(orderRepository.findById(1L)).thenReturn(Optional.of(order));
+            when(orderRepository.findById(uuid(1))).thenReturn(Optional.of(order));
             when(orderRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
-            when(orderItemRepository.findByOrderIdOrderByCreatedAtAsc(anyLong())).thenReturn(List.of());
+            when(orderItemRepository.findByOrderIdOrderByCreatedAtAsc(any(UUID.class))).thenReturn(List.of());
 
-            orderService.cancelOrder(1L);
+            orderService.cancelOrder(uuid(1));
 
             verify(inventoryService).releaseStock("ORDER", "ORD202604060001");
         }
@@ -650,40 +653,40 @@ class OrderServiceTest {
 
         @Test
         void customer_can_cancel_PENDING_order() {
-            Customer cust = customer(1L);
-            Order order = savedOrder(1L, cust, OrderStatus.PENDING, PaymentMethod.COD,
+            Customer cust = customer(uuid(1));
+            Order order = savedOrder(uuid(1), cust, OrderStatus.PENDING, PaymentMethod.COD,
                     new BigDecimal("100000"));
-            when(orderRepository.findById(1L)).thenReturn(Optional.of(order));
+            when(orderRepository.findById(uuid(1))).thenReturn(Optional.of(order));
             when(orderRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
-            when(orderItemRepository.findByOrderIdOrderByCreatedAtAsc(anyLong())).thenReturn(List.of());
+            when(orderItemRepository.findByOrderIdOrderByCreatedAtAsc(any(UUID.class))).thenReturn(List.of());
 
-            orderService.cancelMyOrder(1L, cust);
+            orderService.cancelMyOrder(uuid(1), cust);
 
             verify(orderRepository).save(argThat(o -> o.getStatus() == OrderStatus.CANCELLED));
         }
 
         @Test
         void customer_can_cancel_AWAITING_PAYMENT_order() {
-            Customer cust = customer(1L);
-            Order order = savedOrder(1L, cust, OrderStatus.AWAITING_PAYMENT, PaymentMethod.ONLINE,
+            Customer cust = customer(uuid(1));
+            Order order = savedOrder(uuid(1), cust, OrderStatus.AWAITING_PAYMENT, PaymentMethod.ONLINE,
                     new BigDecimal("100000"));
-            when(orderRepository.findById(1L)).thenReturn(Optional.of(order));
+            when(orderRepository.findById(uuid(1))).thenReturn(Optional.of(order));
             when(orderRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
-            when(orderItemRepository.findByOrderIdOrderByCreatedAtAsc(anyLong())).thenReturn(List.of());
+            when(orderItemRepository.findByOrderIdOrderByCreatedAtAsc(any(UUID.class))).thenReturn(List.of());
 
-            orderService.cancelMyOrder(1L, cust);
+            orderService.cancelMyOrder(uuid(1), cust);
 
             verify(orderRepository).save(argThat(o -> o.getStatus() == OrderStatus.CANCELLED));
         }
 
         @Test
         void customer_cannot_cancel_CONFIRMED_order() {
-            Customer cust = customer(1L);
-            Order order = savedOrder(1L, cust, OrderStatus.CONFIRMED, PaymentMethod.COD,
+            Customer cust = customer(uuid(1));
+            Order order = savedOrder(uuid(1), cust, OrderStatus.CONFIRMED, PaymentMethod.COD,
                     new BigDecimal("100000"));
-            when(orderRepository.findById(1L)).thenReturn(Optional.of(order));
+            when(orderRepository.findById(uuid(1))).thenReturn(Optional.of(order));
 
-            assertThatThrownBy(() -> orderService.cancelMyOrder(1L, cust))
+            assertThatThrownBy(() -> orderService.cancelMyOrder(uuid(1), cust))
                     .isInstanceOf(AppException.class)
                     .extracting(e -> ((AppException) e).getErrorCode())
                     .isEqualTo(ErrorCode.ORDER_CANNOT_CANCEL);
@@ -691,13 +694,13 @@ class OrderServiceTest {
 
         @Test
         void throws_ORDER_NOT_FOUND_when_order_belongs_to_another_customer() {
-            Customer cust = customer(1L);
-            Customer otherCust = customer(999L);
-            Order order = savedOrder(1L, otherCust, OrderStatus.PENDING, PaymentMethod.COD,
+            Customer cust = customer(uuid(1));
+            Customer otherCust = customer(uuid(999));
+            Order order = savedOrder(uuid(1), otherCust, OrderStatus.PENDING, PaymentMethod.COD,
                     new BigDecimal("100000"));
-            when(orderRepository.findById(1L)).thenReturn(Optional.of(order));
+            when(orderRepository.findById(uuid(1))).thenReturn(Optional.of(order));
 
-            assertThatThrownBy(() -> orderService.cancelMyOrder(1L, cust))
+            assertThatThrownBy(() -> orderService.cancelMyOrder(uuid(1), cust))
                     .isInstanceOf(AppException.class)
                     .extracting(e -> ((AppException) e).getErrorCode())
                     .isEqualTo(ErrorCode.ORDER_NOT_FOUND);
@@ -711,12 +714,12 @@ class OrderServiceTest {
 
         @Test
         void throws_ORDER_CANNOT_COMPLETE_when_order_is_not_DELIVERED() {
-            Customer cust = customer(1L);
-            Order order = savedOrder(1L, cust, OrderStatus.CONFIRMED, PaymentMethod.COD,
+            Customer cust = customer(uuid(1));
+            Order order = savedOrder(uuid(1), cust, OrderStatus.CONFIRMED, PaymentMethod.COD,
                     new BigDecimal("100000"));
-            when(orderRepository.findById(1L)).thenReturn(Optional.of(order));
+            when(orderRepository.findById(uuid(1))).thenReturn(Optional.of(order));
 
-            assertThatThrownBy(() -> orderService.completeOrder(1L))
+            assertThatThrownBy(() -> orderService.completeOrder(uuid(1)))
                     .isInstanceOf(AppException.class)
                     .extracting(e -> ((AppException) e).getErrorCode())
                     .isEqualTo(ErrorCode.ORDER_CANNOT_COMPLETE);
@@ -724,14 +727,14 @@ class OrderServiceTest {
 
         @Test
         void DELIVERED_order_transitions_to_COMPLETED_and_commits_stock() {
-            Customer cust = customer(1L);
-            Order order = savedOrder(1L, cust, OrderStatus.DELIVERED, PaymentMethod.COD,
+            Customer cust = customer(uuid(1));
+            Order order = savedOrder(uuid(1), cust, OrderStatus.DELIVERED, PaymentMethod.COD,
                     new BigDecimal("100000"));
-            when(orderRepository.findById(1L)).thenReturn(Optional.of(order));
+            when(orderRepository.findById(uuid(1))).thenReturn(Optional.of(order));
             when(orderRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
-            when(orderItemRepository.findByOrderIdOrderByCreatedAtAsc(anyLong())).thenReturn(List.of());
+            when(orderItemRepository.findByOrderIdOrderByCreatedAtAsc(any(UUID.class))).thenReturn(List.of());
 
-            orderService.completeOrder(1L);
+            orderService.completeOrder(uuid(1));
 
             verify(orderRepository).save(argThat(o -> o.getStatus() == OrderStatus.COMPLETED));
             verify(inventoryService).completeOrder("ORDER", order.getOrderCode());
@@ -745,13 +748,13 @@ class OrderServiceTest {
 
         @Test
         void throws_ORDER_NOT_FOUND_when_order_belongs_to_different_customer() {
-            Customer owner = customer(1L);
-            Customer other = customer(2L);
-            Order order = savedOrder(1L, owner, OrderStatus.PENDING, PaymentMethod.COD,
+            Customer owner = customer(uuid(1));
+            Customer other = customer(uuid(2));
+            Order order = savedOrder(uuid(1), owner, OrderStatus.PENDING, PaymentMethod.COD,
                     new BigDecimal("100000"));
-            when(orderRepository.findById(1L)).thenReturn(Optional.of(order));
+            when(orderRepository.findById(uuid(1))).thenReturn(Optional.of(order));
 
-            assertThatThrownBy(() -> orderService.getOrderById(1L, other))
+            assertThatThrownBy(() -> orderService.getOrderById(uuid(1), other))
                     .isInstanceOf(AppException.class)
                     .extracting(e -> ((AppException) e).getErrorCode())
                     .isEqualTo(ErrorCode.ORDER_NOT_FOUND);

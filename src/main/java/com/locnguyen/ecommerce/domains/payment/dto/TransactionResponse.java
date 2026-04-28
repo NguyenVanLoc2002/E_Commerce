@@ -10,13 +10,14 @@ import lombok.Getter;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
+import java.util.UUID;
 @Getter
 @Builder
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @Schema(description = "Payment transaction response — audit trail entry")
 public class TransactionResponse {
 
-    private final Long id;
+    private final UUID id;
     private final String transactionCode;
     private final TransactionStatus status;
     private final BigDecimal amount;

@@ -11,14 +11,15 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 
+import java.util.UUID;
 @Getter
 @Builder
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @Schema(description = "Payment response")
 public class PaymentResponse {
 
-    private final Long id;
-    private final Long orderId;
+    private final UUID id;
+    private final UUID orderId;
     private final String orderCode;
     private final String paymentCode;
     private final PaymentMethod method;
