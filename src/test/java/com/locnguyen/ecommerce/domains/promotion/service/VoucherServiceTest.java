@@ -31,6 +31,7 @@ import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
+import java.util.UUID;
 /**
  * Unit tests for {@link VoucherService}.
  *
@@ -40,6 +41,8 @@ import static org.mockito.Mockito.*;
  */
 @ExtendWith(MockitoExtension.class)
 class VoucherServiceTest {
+
+    private static UUID uuid(long n) { return new UUID(0L, n); }
 
     @Mock VoucherRepository voucherRepository;
     @Mock VoucherUsageRepository voucherUsageRepository;
@@ -59,7 +62,7 @@ class VoucherServiceTest {
     /** Creates an active promotion with no usage limit and no rules. */
     private Promotion promotion(DiscountType type, BigDecimal value) {
         Promotion p = new Promotion();
-        setId(p, 1L);
+        setId(p, uuid(1));
         p.setName("Test Promo");
         p.setDiscountType(type);
         p.setDiscountValue(value);
@@ -74,7 +77,7 @@ class VoucherServiceTest {
     /** Creates an active voucher with no usage limit. */
     private Voucher voucher(Promotion promo) {
         Voucher v = new Voucher();
-        setId(v, 10L);
+        setId(v, uuid(10));
         v.setCode("TESTCODE");
         v.setPromotion(promo);
         v.setStartDate(PAST);
@@ -92,10 +95,21 @@ class VoucherServiceTest {
         return r;
     }
 
-    private Customer customer(long id) {
+    private Customer customer(UUID id) {
         Customer c = mock(Customer.class);
-        when(c.getId()).thenReturn(id);
+        lenient().when(c.getId()).thenReturn(id);
         return c;
+    }
+
+    /** Convert numeric rule values (e.g., "5,10,15") into the comma-separated UUID format
+     *  produced by {@link #uuid(long)} so that {@code parseIds} can parse them. */
+    private static String idCsv(long... ns) {
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < ns.length; i++) {
+            if (i > 0) sb.append(',');
+            sb.append(uuid(ns[i]));
+        }
+        return sb.toString();
     }
 
     private ValidateVoucherRequest validateRequest(String amount) {
@@ -104,7 +118,7 @@ class VoucherServiceTest {
         return r;
     }
 
-    private CreateVoucherRequest createRequest(String code, Long promotionId) {
+    private CreateVoucherRequest createRequest(String code, UUID promotionId) {
         CreateVoucherRequest r = new CreateVoucherRequest();
         r.setCode(code);
         r.setPromotionId(promotionId);
@@ -114,7 +128,7 @@ class VoucherServiceTest {
     }
 
     /** Uses Spring's ReflectionTestUtils to set the private id field inherited from BaseEntity. */
-    private static void setId(Object entity, Long id) {
+    private static void setId(Object entity, UUID id) {
         ReflectionTestUtils.setField(entity, "id", id);
     }
 
@@ -128,11 +142,11 @@ class VoucherServiceTest {
             Promotion promo = promotion(DiscountType.PERCENTAGE, BigDecimal.valueOf(20));
             Voucher v = voucher(promo);
             when(voucherRepository.findByCodeWithRules("TESTCODE")).thenReturn(Optional.of(v));
-            when(voucherUsageRepository.countByVoucherIdAndCustomerId(anyLong(), anyLong()))
+            when(voucherUsageRepository.countByVoucherIdAndCustomerId(any(UUID.class), any(UUID.class)))
                     .thenReturn(0L);
 
             ValidateVoucherResponse resp = voucherService.validateVoucher(
-                    "TESTCODE", customer(1), validateRequest("100000"));
+                    "TESTCODE", customer(uuid(1)), validateRequest("100000"));
 
             assertThat(resp.getDiscountAmount()).isEqualByComparingTo("20000.00");
             assertThat(resp.getFinalAmount()).isEqualByComparingTo("80000.00");
@@ -144,11 +158,11 @@ class VoucherServiceTest {
             promo.setMaxDiscountAmount(new BigDecimal("100000.00")); // 50% of 1,000,000 = 500,000 → capped
             Voucher v = voucher(promo);
             when(voucherRepository.findByCodeWithRules("TESTCODE")).thenReturn(Optional.of(v));
-            when(voucherUsageRepository.countByVoucherIdAndCustomerId(anyLong(), anyLong()))
+            when(voucherUsageRepository.countByVoucherIdAndCustomerId(any(UUID.class), any(UUID.class)))
                     .thenReturn(0L);
 
             ValidateVoucherResponse resp = voucherService.validateVoucher(
-                    "TESTCODE", customer(1), validateRequest("1000000"));
+                    "TESTCODE", customer(uuid(1)), validateRequest("1000000"));
 
             assertThat(resp.getDiscountAmount()).isEqualByComparingTo("100000.00");
         }
@@ -159,11 +173,11 @@ class VoucherServiceTest {
             promo.setMaxDiscountAmount(new BigDecimal("500000.00")); // 10% of 100,000 = 10,000 < cap
             Voucher v = voucher(promo);
             when(voucherRepository.findByCodeWithRules("TESTCODE")).thenReturn(Optional.of(v));
-            when(voucherUsageRepository.countByVoucherIdAndCustomerId(anyLong(), anyLong()))
+            when(voucherUsageRepository.countByVoucherIdAndCustomerId(any(UUID.class), any(UUID.class)))
                     .thenReturn(0L);
 
             ValidateVoucherResponse resp = voucherService.validateVoucher(
-                    "TESTCODE", customer(1), validateRequest("100000"));
+                    "TESTCODE", customer(uuid(1)), validateRequest("100000"));
 
             assertThat(resp.getDiscountAmount()).isEqualByComparingTo("10000.00");
         }
@@ -173,11 +187,11 @@ class VoucherServiceTest {
             Promotion promo = promotion(DiscountType.FIXED_AMOUNT, new BigDecimal("50000"));
             Voucher v = voucher(promo);
             when(voucherRepository.findByCodeWithRules("TESTCODE")).thenReturn(Optional.of(v));
-            when(voucherUsageRepository.countByVoucherIdAndCustomerId(anyLong(), anyLong()))
+            when(voucherUsageRepository.countByVoucherIdAndCustomerId(any(UUID.class), any(UUID.class)))
                     .thenReturn(0L);
 
             ValidateVoucherResponse resp = voucherService.validateVoucher(
-                    "TESTCODE", customer(1), validateRequest("200000"));
+                    "TESTCODE", customer(uuid(1)), validateRequest("200000"));
 
             assertThat(resp.getDiscountAmount()).isEqualByComparingTo("50000.00");
             assertThat(resp.getFinalAmount()).isEqualByComparingTo("150000.00");
@@ -189,11 +203,11 @@ class VoucherServiceTest {
             Promotion promo = promotion(DiscountType.FIXED_AMOUNT, new BigDecimal("300000"));
             Voucher v = voucher(promo);
             when(voucherRepository.findByCodeWithRules("TESTCODE")).thenReturn(Optional.of(v));
-            when(voucherUsageRepository.countByVoucherIdAndCustomerId(anyLong(), anyLong()))
+            when(voucherUsageRepository.countByVoucherIdAndCustomerId(any(UUID.class), any(UUID.class)))
                     .thenReturn(0L);
 
             ValidateVoucherResponse resp = voucherService.validateVoucher(
-                    "TESTCODE", customer(1), validateRequest("100000"));
+                    "TESTCODE", customer(uuid(1)), validateRequest("100000"));
 
             assertThat(resp.getDiscountAmount()).isEqualByComparingTo("100000.00");
             assertThat(resp.getFinalAmount()).isEqualByComparingTo("0.00");
@@ -210,7 +224,7 @@ class VoucherServiceTest {
             when(voucherRepository.findByCodeWithRules("GHOST")).thenReturn(Optional.empty());
 
             assertThatThrownBy(() ->
-                    voucherService.validateVoucher("GHOST", customer(1), validateRequest("100")))
+                    voucherService.validateVoucher("GHOST", customer(uuid(1)), validateRequest("100")))
                     .isInstanceOf(AppException.class)
                     .extracting(e -> ((AppException) e).getErrorCode())
                     .isEqualTo(ErrorCode.VOUCHER_NOT_FOUND);
@@ -223,7 +237,7 @@ class VoucherServiceTest {
             when(voucherRepository.findByCodeWithRules("TESTCODE")).thenReturn(Optional.of(v));
 
             assertThatThrownBy(() ->
-                    voucherService.validateVoucher("TESTCODE", customer(1), validateRequest("100")))
+                    voucherService.validateVoucher("TESTCODE", customer(uuid(1)), validateRequest("100")))
                     .isInstanceOf(AppException.class)
                     .extracting(e -> ((AppException) e).getErrorCode())
                     .isEqualTo(ErrorCode.VOUCHER_INVALID);
@@ -237,7 +251,7 @@ class VoucherServiceTest {
             when(voucherRepository.findByCodeWithRules("TESTCODE")).thenReturn(Optional.of(v));
 
             assertThatThrownBy(() ->
-                    voucherService.validateVoucher("TESTCODE", customer(1), validateRequest("100")))
+                    voucherService.validateVoucher("TESTCODE", customer(uuid(1)), validateRequest("100")))
                     .isInstanceOf(AppException.class)
                     .extracting(e -> ((AppException) e).getErrorCode())
                     .isEqualTo(ErrorCode.VOUCHER_EXPIRED);
@@ -251,7 +265,7 @@ class VoucherServiceTest {
             when(voucherRepository.findByCodeWithRules("TESTCODE")).thenReturn(Optional.of(v));
 
             assertThatThrownBy(() ->
-                    voucherService.validateVoucher("TESTCODE", customer(1), validateRequest("100")))
+                    voucherService.validateVoucher("TESTCODE", customer(uuid(1)), validateRequest("100")))
                     .isInstanceOf(AppException.class)
                     .extracting(e -> ((AppException) e).getErrorCode())
                     .isEqualTo(ErrorCode.VOUCHER_EXPIRED);
@@ -265,7 +279,7 @@ class VoucherServiceTest {
             when(voucherRepository.findByCodeWithRules("TESTCODE")).thenReturn(Optional.of(v));
 
             assertThatThrownBy(() ->
-                    voucherService.validateVoucher("TESTCODE", customer(1), validateRequest("100")))
+                    voucherService.validateVoucher("TESTCODE", customer(uuid(1)), validateRequest("100")))
                     .isInstanceOf(AppException.class)
                     .extracting(e -> ((AppException) e).getErrorCode())
                     .isEqualTo(ErrorCode.VOUCHER_USAGE_LIMIT_EXCEEDED);
@@ -277,11 +291,11 @@ class VoucherServiceTest {
             v.setUsageLimit(100);
             v.setUsageCount(99); // one slot remaining
             when(voucherRepository.findByCodeWithRules("TESTCODE")).thenReturn(Optional.of(v));
-            when(voucherUsageRepository.countByVoucherIdAndCustomerId(anyLong(), anyLong()))
+            when(voucherUsageRepository.countByVoucherIdAndCustomerId(any(UUID.class), any(UUID.class)))
                     .thenReturn(0L);
 
             assertThatCode(() ->
-                    voucherService.validateVoucher("TESTCODE", customer(1), validateRequest("100")))
+                    voucherService.validateVoucher("TESTCODE", customer(uuid(1)), validateRequest("100")))
                     .doesNotThrowAnyException();
         }
 
@@ -291,11 +305,11 @@ class VoucherServiceTest {
             v.setUsageLimit(null);
             v.setUsageCount(999999);
             when(voucherRepository.findByCodeWithRules("TESTCODE")).thenReturn(Optional.of(v));
-            when(voucherUsageRepository.countByVoucherIdAndCustomerId(anyLong(), anyLong()))
+            when(voucherUsageRepository.countByVoucherIdAndCustomerId(any(UUID.class), any(UUID.class)))
                     .thenReturn(0L);
 
             assertThatCode(() ->
-                    voucherService.validateVoucher("TESTCODE", customer(1), validateRequest("100")))
+                    voucherService.validateVoucher("TESTCODE", customer(uuid(1)), validateRequest("100")))
                     .doesNotThrowAnyException();
         }
 
@@ -304,10 +318,10 @@ class VoucherServiceTest {
             Voucher v = voucher(promotion(DiscountType.FIXED_AMOUNT, BigDecimal.TEN));
             v.setUsageLimitPerUser(3);
             when(voucherRepository.findByCodeWithRules("TESTCODE")).thenReturn(Optional.of(v));
-            when(voucherUsageRepository.countByVoucherIdAndCustomerId(10L, 77L)).thenReturn(3L);
+            when(voucherUsageRepository.countByVoucherIdAndCustomerId(uuid(10), uuid(77))).thenReturn(3L);
 
             assertThatThrownBy(() ->
-                    voucherService.validateVoucher("TESTCODE", customer(77), validateRequest("100")))
+                    voucherService.validateVoucher("TESTCODE", customer(uuid(77)), validateRequest("100")))
                     .isInstanceOf(AppException.class)
                     .extracting(e -> ((AppException) e).getErrorCode())
                     .isEqualTo(ErrorCode.VOUCHER_USER_LIMIT_EXCEEDED);
@@ -318,10 +332,10 @@ class VoucherServiceTest {
             Voucher v = voucher(promotion(DiscountType.FIXED_AMOUNT, BigDecimal.TEN));
             v.setUsageLimitPerUser(3);
             when(voucherRepository.findByCodeWithRules("TESTCODE")).thenReturn(Optional.of(v));
-            when(voucherUsageRepository.countByVoucherIdAndCustomerId(10L, 77L)).thenReturn(2L);
+            when(voucherUsageRepository.countByVoucherIdAndCustomerId(uuid(10), uuid(77))).thenReturn(2L);
 
             assertThatCode(() ->
-                    voucherService.validateVoucher("TESTCODE", customer(77), validateRequest("100")))
+                    voucherService.validateVoucher("TESTCODE", customer(uuid(77)), validateRequest("100")))
                     .doesNotThrowAnyException();
         }
     }
@@ -339,7 +353,7 @@ class VoucherServiceTest {
             when(voucherRepository.findByCodeWithRules("TESTCODE")).thenReturn(Optional.of(v));
 
             assertThatThrownBy(() ->
-                    voucherService.validateVoucher("TESTCODE", customer(1), validateRequest("100")))
+                    voucherService.validateVoucher("TESTCODE", customer(uuid(1)), validateRequest("100")))
                     .isInstanceOf(AppException.class)
                     .extracting(e -> ((AppException) e).getErrorCode())
                     .isEqualTo(ErrorCode.VOUCHER_INVALID);
@@ -356,7 +370,7 @@ class VoucherServiceTest {
             when(voucherRepository.findByCodeWithRules("TESTCODE")).thenReturn(Optional.of(v));
 
             assertThatThrownBy(() ->
-                    voucherService.validateVoucher("TESTCODE", customer(1), validateRequest("100")))
+                    voucherService.validateVoucher("TESTCODE", customer(uuid(1)), validateRequest("100")))
                     .isInstanceOf(AppException.class)
                     .extracting(e -> ((AppException) e).getErrorCode())
                     .isEqualTo(ErrorCode.VOUCHER_EXPIRED);
@@ -373,7 +387,7 @@ class VoucherServiceTest {
             when(voucherRepository.findByCodeWithRules("TESTCODE")).thenReturn(Optional.of(v));
 
             assertThatThrownBy(() ->
-                    voucherService.validateVoucher("TESTCODE", customer(1), validateRequest("100")))
+                    voucherService.validateVoucher("TESTCODE", customer(uuid(1)), validateRequest("100")))
                     .isInstanceOf(AppException.class)
                     .extracting(e -> ((AppException) e).getErrorCode())
                     .isEqualTo(ErrorCode.VOUCHER_EXPIRED);
@@ -388,7 +402,7 @@ class VoucherServiceTest {
             when(voucherRepository.findByCodeWithRules("TESTCODE")).thenReturn(Optional.of(v));
 
             assertThatThrownBy(() ->
-                    voucherService.validateVoucher("TESTCODE", customer(1), validateRequest("100")))
+                    voucherService.validateVoucher("TESTCODE", customer(uuid(1)), validateRequest("100")))
                     .isInstanceOf(AppException.class)
                     .extracting(e -> ((AppException) e).getErrorCode())
                     .isEqualTo(ErrorCode.VOUCHER_USAGE_LIMIT_EXCEEDED);
@@ -402,7 +416,7 @@ class VoucherServiceTest {
             when(voucherRepository.findByCodeWithRules("TESTCODE")).thenReturn(Optional.of(v));
 
             assertThatThrownBy(() ->
-                    voucherService.validateVoucher("TESTCODE", customer(1), validateRequest("100000")))
+                    voucherService.validateVoucher("TESTCODE", customer(uuid(1)), validateRequest("100000")))
                     .isInstanceOf(AppException.class)
                     .extracting(e -> ((AppException) e).getErrorCode())
                     .isEqualTo(ErrorCode.VOUCHER_MIN_ORDER_NOT_MET);
@@ -420,11 +434,11 @@ class VoucherServiceTest {
             promo.setRules(List.of(rule(promo, RuleType.MIN_ORDER_AMOUNT, "200000.00")));
             Voucher v = voucher(promo);
             when(voucherRepository.findByCodeWithRules("TESTCODE")).thenReturn(Optional.of(v));
-            when(voucherUsageRepository.countByVoucherIdAndCustomerId(anyLong(), anyLong()))
+            when(voucherUsageRepository.countByVoucherIdAndCustomerId(any(UUID.class), any(UUID.class)))
                     .thenReturn(0L);
 
             assertThatCode(() ->
-                    voucherService.validateVoucher("TESTCODE", customer(1), validateRequest("200000")))
+                    voucherService.validateVoucher("TESTCODE", customer(uuid(1)), validateRequest("200000")))
                     .doesNotThrowAnyException();
         }
 
@@ -436,7 +450,7 @@ class VoucherServiceTest {
             when(voucherRepository.findByCodeWithRules("TESTCODE")).thenReturn(Optional.of(v));
 
             assertThatThrownBy(() ->
-                    voucherService.validateVoucher("TESTCODE", customer(1), validateRequest("199999")))
+                    voucherService.validateVoucher("TESTCODE", customer(uuid(1)), validateRequest("199999")))
                     .isInstanceOf(AppException.class)
                     .extracting(e -> ((AppException) e).getErrorCode())
                     .isEqualTo(ErrorCode.VOUCHER_MIN_ORDER_NOT_MET);
@@ -445,30 +459,30 @@ class VoucherServiceTest {
         @Test
         void specificProducts_rule_passes_when_at_least_one_product_matches() {
             Promotion promo = promotion(DiscountType.FIXED_AMOUNT, BigDecimal.TEN);
-            promo.setRules(List.of(rule(promo, RuleType.SPECIFIC_PRODUCTS, "5,10,15")));
+            promo.setRules(List.of(rule(promo, RuleType.SPECIFIC_PRODUCTS, idCsv(5L, 10L, 15L))));
             Voucher v = voucher(promo);
             when(voucherRepository.findByCodeWithRules("TESTCODE")).thenReturn(Optional.of(v));
-            when(voucherUsageRepository.countByVoucherIdAndCustomerId(anyLong(), anyLong()))
+            when(voucherUsageRepository.countByVoucherIdAndCustomerId(any(UUID.class), any(UUID.class)))
                     .thenReturn(0L);
 
             ValidateVoucherRequest req = validateRequest("500000");
-            req.setProductIds(List.of(10L, 20L, 30L)); // 10 is in required list
+            req.setProductIds(List.of(uuid(10), uuid(20), uuid(30))); // 10 is in required list
 
-            assertThatCode(() -> voucherService.validateVoucher("TESTCODE", customer(1), req))
+            assertThatCode(() -> voucherService.validateVoucher("TESTCODE", customer(uuid(1)), req))
                     .doesNotThrowAnyException();
         }
 
         @Test
         void specificProducts_rule_fails_when_no_product_in_order_matches() {
             Promotion promo = promotion(DiscountType.FIXED_AMOUNT, BigDecimal.TEN);
-            promo.setRules(List.of(rule(promo, RuleType.SPECIFIC_PRODUCTS, "5,10,15")));
+            promo.setRules(List.of(rule(promo, RuleType.SPECIFIC_PRODUCTS, idCsv(5L, 10L, 15L))));
             Voucher v = voucher(promo);
             when(voucherRepository.findByCodeWithRules("TESTCODE")).thenReturn(Optional.of(v));
 
             ValidateVoucherRequest req = validateRequest("500000");
-            req.setProductIds(List.of(99L, 100L)); // none in required list
+            req.setProductIds(List.of(uuid(99), uuid(100))); // none in required list
 
-            assertThatThrownBy(() -> voucherService.validateVoucher("TESTCODE", customer(1), req))
+            assertThatThrownBy(() -> voucherService.validateVoucher("TESTCODE", customer(uuid(1)), req))
                     .isInstanceOf(AppException.class)
                     .extracting(e -> ((AppException) e).getErrorCode())
                     .isEqualTo(ErrorCode.VOUCHER_NOT_APPLICABLE);
@@ -478,12 +492,12 @@ class VoucherServiceTest {
         void specificProducts_rule_fails_when_productIds_is_null_in_request() {
             // null productIds → safeList → empty → no match against required IDs
             Promotion promo = promotion(DiscountType.FIXED_AMOUNT, BigDecimal.TEN);
-            promo.setRules(List.of(rule(promo, RuleType.SPECIFIC_PRODUCTS, "5,10")));
+            promo.setRules(List.of(rule(promo, RuleType.SPECIFIC_PRODUCTS, idCsv(5L, 10L))));
             Voucher v = voucher(promo);
             when(voucherRepository.findByCodeWithRules("TESTCODE")).thenReturn(Optional.of(v));
 
             assertThatThrownBy(() ->
-                    voucherService.validateVoucher("TESTCODE", customer(1), validateRequest("300000")))
+                    voucherService.validateVoucher("TESTCODE", customer(uuid(1)), validateRequest("300000")))
                     .isInstanceOf(AppException.class)
                     .extracting(e -> ((AppException) e).getErrorCode())
                     .isEqualTo(ErrorCode.VOUCHER_NOT_APPLICABLE);
@@ -492,30 +506,30 @@ class VoucherServiceTest {
         @Test
         void specificCategories_rule_passes_when_category_in_order() {
             Promotion promo = promotion(DiscountType.FIXED_AMOUNT, BigDecimal.TEN);
-            promo.setRules(List.of(rule(promo, RuleType.SPECIFIC_CATEGORIES, "3,7")));
+            promo.setRules(List.of(rule(promo, RuleType.SPECIFIC_CATEGORIES, idCsv(3L, 7L))));
             Voucher v = voucher(promo);
             when(voucherRepository.findByCodeWithRules("TESTCODE")).thenReturn(Optional.of(v));
-            when(voucherUsageRepository.countByVoucherIdAndCustomerId(anyLong(), anyLong()))
+            when(voucherUsageRepository.countByVoucherIdAndCustomerId(any(UUID.class), any(UUID.class)))
                     .thenReturn(0L);
 
             ValidateVoucherRequest req = validateRequest("300000");
-            req.setCategoryIds(List.of(7L));
+            req.setCategoryIds(List.of(uuid(7)));
 
-            assertThatCode(() -> voucherService.validateVoucher("TESTCODE", customer(1), req))
+            assertThatCode(() -> voucherService.validateVoucher("TESTCODE", customer(uuid(1)), req))
                     .doesNotThrowAnyException();
         }
 
         @Test
         void specificBrands_rule_fails_when_required_brand_absent_from_order() {
             Promotion promo = promotion(DiscountType.FIXED_AMOUNT, BigDecimal.TEN);
-            promo.setRules(List.of(rule(promo, RuleType.SPECIFIC_BRANDS, "2,4")));
+            promo.setRules(List.of(rule(promo, RuleType.SPECIFIC_BRANDS, idCsv(2L, 4L))));
             Voucher v = voucher(promo);
             when(voucherRepository.findByCodeWithRules("TESTCODE")).thenReturn(Optional.of(v));
 
             ValidateVoucherRequest req = validateRequest("300000");
-            req.setBrandIds(List.of(5L, 6L)); // neither 2 nor 4
+            req.setBrandIds(List.of(uuid(5), uuid(6))); // neither 2 nor 4
 
-            assertThatThrownBy(() -> voucherService.validateVoucher("TESTCODE", customer(1), req))
+            assertThatThrownBy(() -> voucherService.validateVoucher("TESTCODE", customer(uuid(1)), req))
                     .isInstanceOf(AppException.class)
                     .extracting(e -> ((AppException) e).getErrorCode())
                     .isEqualTo(ErrorCode.VOUCHER_NOT_APPLICABLE);
@@ -526,10 +540,10 @@ class VoucherServiceTest {
             Promotion promo = promotion(DiscountType.FIXED_AMOUNT, BigDecimal.TEN);
             promo.setRules(List.of(rule(promo, RuleType.FIRST_ORDER, "true")));
             Voucher v = voucher(promo);
-            Customer cust = customer(42L);
+            Customer cust = customer(uuid(42));
             when(voucherRepository.findByCodeWithRules("TESTCODE")).thenReturn(Optional.of(v));
-            when(voucherUsageRepository.countByVoucherIdAndCustomerId(10L, 42L)).thenReturn(0L);
-            when(orderRepository.countCompletedByCustomerId(42L)).thenReturn(0L);
+            when(voucherUsageRepository.countByVoucherIdAndCustomerId(uuid(10), uuid(42))).thenReturn(0L);
+            when(orderRepository.countCompletedByCustomerId(uuid(42))).thenReturn(0L);
 
             assertThatCode(() ->
                     voucherService.validateVoucher("TESTCODE", cust, validateRequest("300000")))
@@ -541,9 +555,9 @@ class VoucherServiceTest {
             Promotion promo = promotion(DiscountType.FIXED_AMOUNT, BigDecimal.TEN);
             promo.setRules(List.of(rule(promo, RuleType.FIRST_ORDER, "true")));
             Voucher v = voucher(promo);
-            Customer cust = customer(42L);
+            Customer cust = customer(uuid(42));
             when(voucherRepository.findByCodeWithRules("TESTCODE")).thenReturn(Optional.of(v));
-            when(orderRepository.countCompletedByCustomerId(42L)).thenReturn(1L);
+            when(orderRepository.countCompletedByCustomerId(uuid(42))).thenReturn(1L);
 
             assertThatThrownBy(() ->
                     voucherService.validateVoucher("TESTCODE", cust, validateRequest("300000")))
@@ -561,10 +575,10 @@ class VoucherServiceTest {
             when(voucherRepository.findByCodeWithRules("TESTCODE")).thenReturn(Optional.of(v));
 
             ValidateVoucherRequest req = validateRequest("300000");
-            req.setProductIds(List.of(1L));
+            req.setProductIds(List.of(uuid(1)));
 
             assertThatThrownBy(() ->
-                    voucherService.validateVoucher("TESTCODE", customer(1), req))
+                    voucherService.validateVoucher("TESTCODE", customer(uuid(1)), req))
                     .isInstanceOf(AppException.class)
                     .extracting(e -> ((AppException) e).getErrorCode())
                     .isEqualTo(ErrorCode.INTERNAL_SERVER_ERROR);
@@ -582,9 +596,9 @@ class VoucherServiceTest {
             when(voucherRepository.findByCodeWithRules("TESTCODE")).thenReturn(Optional.of(v));
 
             ValidateVoucherRequest req = validateRequest("200000");
-            req.setProductIds(List.of(1L, 2L)); // 99 not present
+            req.setProductIds(List.of(uuid(1), uuid(2))); // 99 not present
 
-            assertThatThrownBy(() -> voucherService.validateVoucher("TESTCODE", customer(1), req))
+            assertThatThrownBy(() -> voucherService.validateVoucher("TESTCODE", customer(uuid(1)), req))
                     .isInstanceOf(AppException.class)
                     .extracting(e -> ((AppException) e).getErrorCode())
                     .isEqualTo(ErrorCode.VOUCHER_NOT_APPLICABLE);
@@ -599,7 +613,7 @@ class VoucherServiceTest {
         @Test
         void returns_zero_when_code_is_null() {
             BigDecimal result = voucherService.applyVoucher(
-                    null, customer(1), 100L, BigDecimal.TEN, List.of(), List.of(), List.of());
+                    null, customer(uuid(1)), uuid(100), BigDecimal.TEN, List.of(), List.of(), List.of());
 
             assertThat(result).isEqualByComparingTo(BigDecimal.ZERO);
             verifyNoInteractions(voucherRepository);
@@ -608,7 +622,7 @@ class VoucherServiceTest {
         @Test
         void returns_zero_when_code_is_blank() {
             BigDecimal result = voucherService.applyVoucher(
-                    "   ", customer(1), 100L, BigDecimal.TEN, List.of(), List.of(), List.of());
+                    "   ", customer(uuid(1)), uuid(100), BigDecimal.TEN, List.of(), List.of(), List.of());
 
             assertThat(result).isEqualByComparingTo(BigDecimal.ZERO);
             verifyNoInteractions(voucherRepository);
@@ -618,38 +632,38 @@ class VoucherServiceTest {
         void idempotent_returns_zero_when_usage_already_recorded_for_order() {
             Voucher v = voucher(promotion(DiscountType.FIXED_AMOUNT, BigDecimal.TEN));
             when(voucherRepository.findByCodeWithRules("TESTCODE")).thenReturn(Optional.of(v));
-            when(voucherUsageRepository.existsByVoucherIdAndOrderId(10L, 200L)).thenReturn(true);
+            when(voucherUsageRepository.existsByVoucherIdAndOrderId(uuid(10), uuid(200))).thenReturn(true);
 
             BigDecimal result = voucherService.applyVoucher(
-                    "TESTCODE", customer(1), 200L, new BigDecimal("500000"), List.of(), List.of(), List.of());
+                    "TESTCODE", customer(uuid(1)), uuid(200), new BigDecimal("500000"), List.of(), List.of(), List.of());
 
             assertThat(result).isEqualByComparingTo(BigDecimal.ZERO);
-            verify(voucherRepository, never()).incrementUsageCount(anyLong());
-            verify(promotionService, never()).incrementUsageCount(anyLong());
+            verify(voucherRepository, never()).incrementUsageCount(any(UUID.class));
+            verify(promotionService, never()).incrementUsageCount(any(UUID.class));
         }
 
         @Test
         void happy_path_records_usage_and_atomically_increments_both_counters() {
             Promotion promo = promotion(DiscountType.FIXED_AMOUNT, new BigDecimal("50000"));
             Voucher v = voucher(promo);
-            Customer cust = customer(7L);
+            Customer cust = customer(uuid(7));
             when(voucherRepository.findByCodeWithRules("TESTCODE")).thenReturn(Optional.of(v));
-            when(voucherUsageRepository.existsByVoucherIdAndOrderId(10L, 300L)).thenReturn(false);
-            when(voucherUsageRepository.countByVoucherIdAndCustomerId(10L, 7L)).thenReturn(0L);
+            when(voucherUsageRepository.existsByVoucherIdAndOrderId(uuid(10), uuid(300))).thenReturn(false);
+            when(voucherUsageRepository.countByVoucherIdAndCustomerId(uuid(10), uuid(7))).thenReturn(0L);
 
             BigDecimal result = voucherService.applyVoucher(
-                    "TESTCODE", cust, 300L, new BigDecimal("200000"), List.of(), List.of(), List.of());
+                    "TESTCODE", cust, uuid(300), new BigDecimal("200000"), List.of(), List.of(), List.of());
 
             assertThat(result).isEqualByComparingTo("50000.00");
 
             // VoucherUsage record created with correct orderId and discount
             verify(voucherUsageRepository).save(argThat(u ->
-                    u.getOrderId().equals(300L)
+                    u.getOrderId().equals(uuid(300))
                     && u.getDiscountAmount().compareTo(new BigDecimal("50000")) == 0));
 
             // Both counters incremented via atomic @Modifying queries (not read-modify-write)
-            verify(voucherRepository).incrementUsageCount(10L);
-            verify(promotionService).incrementUsageCount(1L);
+            verify(voucherRepository).incrementUsageCount(uuid(10));
+            verify(promotionService).incrementUsageCount(uuid(1));
         }
 
         @Test
@@ -657,35 +671,35 @@ class VoucherServiceTest {
             Voucher v = voucher(promotion(DiscountType.FIXED_AMOUNT, BigDecimal.TEN));
             v.setActive(false);
             when(voucherRepository.findByCodeWithRules("TESTCODE")).thenReturn(Optional.of(v));
-            when(voucherUsageRepository.existsByVoucherIdAndOrderId(anyLong(), anyLong()))
+            when(voucherUsageRepository.existsByVoucherIdAndOrderId(any(UUID.class), any(UUID.class)))
                     .thenReturn(false);
 
             assertThatThrownBy(() ->
-                    voucherService.applyVoucher("TESTCODE", customer(1), 400L,
+                    voucherService.applyVoucher("TESTCODE", customer(uuid(1)), uuid(400),
                             new BigDecimal("100000"), List.of(), List.of(), List.of()))
                     .isInstanceOf(AppException.class)
                     .extracting(e -> ((AppException) e).getErrorCode())
                     .isEqualTo(ErrorCode.VOUCHER_INVALID);
 
             // No counter changes on failed apply
-            verify(voucherRepository, never()).incrementUsageCount(anyLong());
-            verify(promotionService, never()).incrementUsageCount(anyLong());
+            verify(voucherRepository, never()).incrementUsageCount(any(UUID.class));
+            verify(promotionService, never()).incrementUsageCount(any(UUID.class));
         }
 
         @Test
         void discount_on_apply_matches_validateVoucher_preview() {
             Promotion promo = promotion(DiscountType.PERCENTAGE, BigDecimal.valueOf(15));
             Voucher v = voucher(promo);
-            Customer cust = customer(5L);
+            Customer cust = customer(uuid(5));
             when(voucherRepository.findByCodeWithRules("TESTCODE")).thenReturn(Optional.of(v));
-            when(voucherUsageRepository.existsByVoucherIdAndOrderId(anyLong(), anyLong()))
+            when(voucherUsageRepository.existsByVoucherIdAndOrderId(any(UUID.class), any(UUID.class)))
                     .thenReturn(false);
-            when(voucherUsageRepository.countByVoucherIdAndCustomerId(anyLong(), anyLong()))
+            when(voucherUsageRepository.countByVoucherIdAndCustomerId(any(UUID.class), any(UUID.class)))
                     .thenReturn(0L);
 
             BigDecimal orderAmount = new BigDecimal("400000");
             BigDecimal applied = voucherService.applyVoucher(
-                    "TESTCODE", cust, 999L, orderAmount, List.of(), List.of(), List.of());
+                    "TESTCODE", cust, uuid(999), orderAmount, List.of(), List.of(), List.of());
 
             // 15% of 400,000 = 60,000
             assertThat(applied).isEqualByComparingTo("60000.00");
@@ -699,13 +713,13 @@ class VoucherServiceTest {
 
         @Test
         void no_op_when_code_is_null() {
-            voucherService.releaseVoucher(null, 100L);
+            voucherService.releaseVoucher(null, uuid(100));
             verifyNoInteractions(voucherRepository);
         }
 
         @Test
         void no_op_when_code_is_blank_whitespace() {
-            voucherService.releaseVoucher("   ", 100L);
+            voucherService.releaseVoucher("   ", uuid(100));
             verifyNoInteractions(voucherRepository);
         }
 
@@ -713,9 +727,9 @@ class VoucherServiceTest {
         void no_op_when_voucher_not_found_in_db() {
             when(voucherRepository.findByCodeIgnoreCase("MISSING")).thenReturn(Optional.empty());
 
-            voucherService.releaseVoucher("MISSING", 100L);
+            voucherService.releaseVoucher("MISSING", uuid(100));
 
-            verify(voucherRepository, never()).decrementUsageCount(anyLong());
+            verify(voucherRepository, never()).decrementUsageCount(any(UUID.class));
             verifyNoInteractions(promotionService);
         }
 
@@ -723,12 +737,12 @@ class VoucherServiceTest {
         void no_op_when_no_usage_record_exists_for_the_order() {
             Voucher v = voucher(promotion(DiscountType.FIXED_AMOUNT, BigDecimal.TEN));
             when(voucherRepository.findByCodeIgnoreCase("TESTCODE")).thenReturn(Optional.of(v));
-            when(voucherUsageRepository.existsByVoucherIdAndOrderId(10L, 999L)).thenReturn(false);
+            when(voucherUsageRepository.existsByVoucherIdAndOrderId(uuid(10), uuid(999))).thenReturn(false);
 
-            voucherService.releaseVoucher("TESTCODE", 999L);
+            voucherService.releaseVoucher("TESTCODE", uuid(999));
 
-            verify(voucherRepository, never()).decrementUsageCount(anyLong());
-            verify(promotionService, never()).decrementUsageCount(anyLong());
+            verify(voucherRepository, never()).decrementUsageCount(any(UUID.class));
+            verify(promotionService, never()).decrementUsageCount(any(UUID.class));
         }
 
         @Test
@@ -736,12 +750,12 @@ class VoucherServiceTest {
             Promotion promo = promotion(DiscountType.FIXED_AMOUNT, BigDecimal.TEN);
             Voucher v = voucher(promo);
             when(voucherRepository.findByCodeIgnoreCase("TESTCODE")).thenReturn(Optional.of(v));
-            when(voucherUsageRepository.existsByVoucherIdAndOrderId(10L, 500L)).thenReturn(true);
+            when(voucherUsageRepository.existsByVoucherIdAndOrderId(uuid(10), uuid(500))).thenReturn(true);
 
-            voucherService.releaseVoucher("TESTCODE", 500L);
+            voucherService.releaseVoucher("TESTCODE", uuid(500));
 
-            verify(voucherRepository).decrementUsageCount(10L);
-            verify(promotionService).decrementUsageCount(1L);
+            verify(voucherRepository).decrementUsageCount(uuid(10));
+            verify(promotionService).decrementUsageCount(uuid(1));
         }
     }
 
@@ -752,10 +766,10 @@ class VoucherServiceTest {
 
         @Test
         void throws_NOT_FOUND_when_promotion_does_not_exist() {
-            when(promotionService.findByIdOrThrow(999L))
+            when(promotionService.findByIdOrThrow(uuid(999)))
                     .thenThrow(new AppException(ErrorCode.PROMOTION_NOT_FOUND));
 
-            assertThatThrownBy(() -> voucherService.createVoucher(createRequest("PROMO20", 999L)))
+            assertThatThrownBy(() -> voucherService.createVoucher(createRequest("PROMO20", uuid(999))))
                     .isInstanceOf(AppException.class)
                     .extracting(e -> ((AppException) e).getErrorCode())
                     .isEqualTo(ErrorCode.PROMOTION_NOT_FOUND);
@@ -764,9 +778,9 @@ class VoucherServiceTest {
         @Test
         void throws_BAD_REQUEST_when_end_date_is_before_start_date() {
             Promotion promo = promotion(DiscountType.FIXED_AMOUNT, BigDecimal.TEN);
-            when(promotionService.findByIdOrThrow(1L)).thenReturn(promo);
+            when(promotionService.findByIdOrThrow(uuid(1))).thenReturn(promo);
 
-            CreateVoucherRequest req = createRequest("CODE", 1L);
+            CreateVoucherRequest req = createRequest("CODE", uuid(1));
             req.setStartDate(FUTURE);
             req.setEndDate(PAST); // reversed range
 
@@ -779,10 +793,10 @@ class VoucherServiceTest {
         @Test
         void throws_CONFLICT_when_code_already_in_use() {
             Promotion promo = promotion(DiscountType.FIXED_AMOUNT, BigDecimal.TEN);
-            when(promotionService.findByIdOrThrow(1L)).thenReturn(promo);
+            when(promotionService.findByIdOrThrow(uuid(1))).thenReturn(promo);
             when(voucherRepository.existsByCodeIgnoreCase("TAKEN")).thenReturn(true);
 
-            assertThatThrownBy(() -> voucherService.createVoucher(createRequest("TAKEN", 1L)))
+            assertThatThrownBy(() -> voucherService.createVoucher(createRequest("TAKEN", uuid(1))))
                     .isInstanceOf(AppException.class)
                     .extracting(e -> ((AppException) e).getErrorCode())
                     .isEqualTo(ErrorCode.VOUCHER_CODE_ALREADY_EXISTS);
@@ -791,13 +805,13 @@ class VoucherServiceTest {
         @Test
         void saves_voucher_with_code_normalized_to_uppercase() {
             Promotion promo = promotion(DiscountType.FIXED_AMOUNT, BigDecimal.TEN);
-            when(promotionService.findByIdOrThrow(1L)).thenReturn(promo);
+            when(promotionService.findByIdOrThrow(uuid(1))).thenReturn(promo);
             when(voucherRepository.existsByCodeIgnoreCase("SUMMER20")).thenReturn(false);
             Voucher saved = voucher(promo);
             when(voucherRepository.save(any())).thenReturn(saved);
             when(voucherMapper.toResponse(any())).thenReturn(mock(VoucherResponse.class));
 
-            voucherService.createVoucher(createRequest("summer20", 1L));
+            voucherService.createVoucher(createRequest("summer20", uuid(1)));
 
             verify(voucherRepository).save(argThat(v -> "SUMMER20".equals(v.getCode())));
         }
@@ -805,13 +819,13 @@ class VoucherServiceTest {
         @Test
         void auto_generates_non_blank_code_when_code_is_null() {
             Promotion promo = promotion(DiscountType.FIXED_AMOUNT, BigDecimal.TEN);
-            when(promotionService.findByIdOrThrow(1L)).thenReturn(promo);
+            when(promotionService.findByIdOrThrow(uuid(1))).thenReturn(promo);
             when(voucherRepository.existsByCodeIgnoreCase(anyString())).thenReturn(false);
             Voucher saved = voucher(promo);
             when(voucherRepository.save(any())).thenReturn(saved);
             when(voucherMapper.toResponse(any())).thenReturn(mock(VoucherResponse.class));
 
-            voucherService.createVoucher(createRequest(null, 1L));
+            voucherService.createVoucher(createRequest(null, uuid(1)));
 
             verify(voucherRepository).save(argThat(v -> v.getCode() != null && !v.getCode().isBlank()));
         }
@@ -819,13 +833,13 @@ class VoucherServiceTest {
         @Test
         void auto_generates_non_blank_code_when_code_is_empty_string() {
             Promotion promo = promotion(DiscountType.FIXED_AMOUNT, BigDecimal.TEN);
-            when(promotionService.findByIdOrThrow(1L)).thenReturn(promo);
+            when(promotionService.findByIdOrThrow(uuid(1))).thenReturn(promo);
             when(voucherRepository.existsByCodeIgnoreCase(anyString())).thenReturn(false);
             Voucher saved = voucher(promo);
             when(voucherRepository.save(any())).thenReturn(saved);
             when(voucherMapper.toResponse(any())).thenReturn(mock(VoucherResponse.class));
 
-            voucherService.createVoucher(createRequest("   ", 1L));
+            voucherService.createVoucher(createRequest("   ", uuid(1)));
 
             verify(voucherRepository).save(argThat(v -> v.getCode() != null && !v.getCode().isBlank()));
         }
@@ -838,9 +852,9 @@ class VoucherServiceTest {
 
         @Test
         void throws_NOT_FOUND_when_voucher_does_not_exist() {
-            when(voucherRepository.findById(99L)).thenReturn(Optional.empty());
+            when(voucherRepository.findById(uuid(99))).thenReturn(Optional.empty());
 
-            assertThatThrownBy(() -> voucherService.deleteVoucher(99L))
+            assertThatThrownBy(() -> voucherService.deleteVoucher(uuid(99)))
                     .isInstanceOf(AppException.class)
                     .extracting(e -> ((AppException) e).getErrorCode())
                     .isEqualTo(ErrorCode.VOUCHER_NOT_FOUND);
@@ -849,10 +863,10 @@ class VoucherServiceTest {
         @Test
         void soft_deletes_voucher_without_removing_from_db() {
             Voucher v = voucher(promotion(DiscountType.FIXED_AMOUNT, BigDecimal.TEN));
-            when(voucherRepository.findById(10L)).thenReturn(Optional.of(v));
+            when(voucherRepository.findById(uuid(10))).thenReturn(Optional.of(v));
             when(voucherRepository.save(any())).thenReturn(v);
 
-            voucherService.deleteVoucher(10L);
+            voucherService.deleteVoucher(uuid(10));
 
             verify(voucherRepository).save(argThat(Voucher::isDeleted));
         }

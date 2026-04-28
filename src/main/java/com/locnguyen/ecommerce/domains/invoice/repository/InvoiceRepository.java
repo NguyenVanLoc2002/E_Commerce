@@ -6,12 +6,13 @@ import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 
 import java.util.Optional;
 
-public interface InvoiceRepository extends JpaRepository<Invoice, Long>,
+import java.util.UUID;
+public interface InvoiceRepository extends JpaRepository<Invoice, UUID>,
         JpaSpecificationExecutor<Invoice> {
 
-    Optional<Invoice> findByOrderId(Long orderId);
+    Optional<Invoice> findByOrderId(UUID orderId);
 
     Optional<Invoice> findByInvoiceCode(String invoiceCode);
 
-    boolean existsByOrderId(Long orderId);
+    boolean existsByOrderId(UUID orderId);
 }

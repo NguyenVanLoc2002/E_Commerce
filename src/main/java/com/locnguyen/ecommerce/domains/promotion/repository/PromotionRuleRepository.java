@@ -5,9 +5,10 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;
 
-public interface PromotionRuleRepository extends JpaRepository<PromotionRule, Long> {
+import java.util.UUID;
+public interface PromotionRuleRepository extends JpaRepository<PromotionRule, UUID> {
 
-    List<PromotionRule> findByPromotionId(Long promotionId);
+    List<PromotionRule> findByPromotionId(UUID promotionId);
 
-    void deleteByPromotionId(Long promotionId);
+    void deleteByPromotionId(UUID promotionId);
 }

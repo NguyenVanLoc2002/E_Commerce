@@ -7,6 +7,7 @@ import lombok.Getter;
 
 import java.math.BigDecimal;
 
+import java.util.UUID;
 /**
  * Filter parameters for product list queries.
  * All fields are optional — null means "no filter on this field".
@@ -20,10 +21,10 @@ public class ProductFilter {
     private String keyword;
 
     @Schema(description = "Filter by category ID", example = "1")
-    private Long categoryId;
+    private UUID categoryId;
 
     @Schema(description = "Filter by brand ID", example = "2")
-    private Long brandId;
+    private UUID brandId;
 
     @Schema(description = "Filter by product status", example = "PUBLISHED")
     private ProductStatus status;

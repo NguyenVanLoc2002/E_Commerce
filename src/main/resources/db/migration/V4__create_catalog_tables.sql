@@ -6,8 +6,8 @@
 -- ─── Categories (self-referencing hierarchy) ─────────────────────────────────
 
 CREATE TABLE categories (
-    id              BIGINT PRIMARY KEY AUTO_INCREMENT,
-    parent_id       BIGINT       NULL,
+    id              CHAR(36) PRIMARY KEY,
+    parent_id       CHAR(36)       NULL,
     name            VARCHAR(100) NOT NULL,
     slug            VARCHAR(255) NOT NULL,
     description     TEXT         NULL,
@@ -32,7 +32,7 @@ CREATE INDEX idx_categories_sort_order ON categories(sort_order);
 -- ─── Brands ─────────────────────────────────────────────────────────────────
 
 CREATE TABLE brands (
-    id              BIGINT PRIMARY KEY AUTO_INCREMENT,
+    id              CHAR(36) PRIMARY KEY,
     name            VARCHAR(100) NOT NULL,
     slug            VARCHAR(255) NOT NULL,
     logo_url        VARCHAR(500) NULL,
@@ -53,12 +53,12 @@ CREATE INDEX idx_brands_status ON brands(status);
 -- ─── Products ───────────────────────────────────────────────────────────────
 
 CREATE TABLE products (
-    id                BIGINT PRIMARY KEY AUTO_INCREMENT,
+    id                CHAR(36) PRIMARY KEY,
     name              VARCHAR(255) NOT NULL,
     slug              VARCHAR(255) NOT NULL,
     short_description VARCHAR(500) NULL,
     description       TEXT         NULL,
-    brand_id          BIGINT       NULL,
+    brand_id          CHAR(36)       NULL,
     status            VARCHAR(50)  NOT NULL DEFAULT 'DRAFT',
     is_featured       BOOLEAN      NOT NULL DEFAULT FALSE,
     created_at        DATETIME     NOT NULL,
@@ -80,8 +80,8 @@ CREATE INDEX idx_products_created_at ON products(created_at);
 -- ─── Product-Categories (M:N) ──────────────────────────────────────────────
 
 CREATE TABLE product_categories (
-    product_id  BIGINT NOT NULL,
-    category_id BIGINT NOT NULL,
+    product_id  CHAR(36) NOT NULL,
+    category_id CHAR(36) NOT NULL,
     CONSTRAINT pk_product_categories  PRIMARY KEY (product_id, category_id),
     CONSTRAINT fk_pc_product   FOREIGN KEY (product_id) REFERENCES products(id),
     CONSTRAINT fk_pc_category  FOREIGN KEY (category_id) REFERENCES categories(id)
@@ -92,8 +92,8 @@ CREATE INDEX idx_pc_category_id ON product_categories(category_id);
 -- ─── Product Variants ───────────────────────────────────────────────────────
 
 CREATE TABLE product_variants (
-    id              BIGINT PRIMARY KEY AUTO_INCREMENT,
-    product_id      BIGINT       NOT NULL,
+    id              CHAR(36) PRIMARY KEY,
+    product_id      CHAR(36)       NOT NULL,
     sku             VARCHAR(100) NOT NULL,
     barcode         VARCHAR(100) NULL,
     variant_name    VARCHAR(255) NOT NULL,
@@ -119,7 +119,7 @@ CREATE INDEX idx_pv_status     ON product_variants(status);
 -- ─── Product Attributes (size, color, material) ────────────────────────────
 
 CREATE TABLE product_attributes (
-    id          BIGINT PRIMARY KEY AUTO_INCREMENT,
+    id          CHAR(36) PRIMARY KEY,
     name        VARCHAR(100) NOT NULL,
     code        VARCHAR(50)  NOT NULL,
     type        VARCHAR(50)  NOT NULL DEFAULT 'VARIANT',
@@ -133,8 +133,8 @@ CREATE TABLE product_attributes (
 -- ─── Product Attribute Values (S, M, L, Red, Blue) ──────────────────────────
 
 CREATE TABLE product_attribute_values (
-    id              BIGINT PRIMARY KEY AUTO_INCREMENT,
-    attribute_id    BIGINT       NOT NULL,
+    id              CHAR(36) PRIMARY KEY,
+    attribute_id    CHAR(36)       NOT NULL,
     value           VARCHAR(100) NOT NULL,
     display_value   VARCHAR(100) NULL,
     created_at      DATETIME     NOT NULL,
@@ -149,8 +149,8 @@ CREATE INDEX idx_pav_attribute_id ON product_attribute_values(attribute_id);
 -- ─── Variant-Attribute Values (M:N variant ↔ attribute value) ─────────────
 
 CREATE TABLE variant_attribute_values (
-    variant_id          BIGINT NOT NULL,
-    attribute_value_id  BIGINT NOT NULL,
+    variant_id          CHAR(36) NOT NULL,
+    attribute_value_id  CHAR(36) NOT NULL,
     CONSTRAINT pk_variant_attribute_values     PRIMARY KEY (variant_id, attribute_value_id),
     CONSTRAINT fk_vav_variant          FOREIGN KEY (variant_id) REFERENCES product_variants(id),
     CONSTRAINT fk_vav_attribute_value  FOREIGN KEY (attribute_value_id) REFERENCES product_attribute_values(id)
@@ -161,9 +161,9 @@ CREATE INDEX idx_vav_attribute_value_id ON variant_attribute_values(attribute_va
 -- ─── Product Media (images, videos per product/variant) ───────────────────
 
 CREATE TABLE product_media (
-    id          BIGINT PRIMARY KEY AUTO_INCREMENT,
-    product_id  BIGINT       NOT NULL,
-    variant_id  BIGINT       NULL,
+    id          CHAR(36) PRIMARY KEY,
+    product_id  CHAR(36)       NOT NULL,
+    variant_id  CHAR(36)       NULL,
     media_url   VARCHAR(500) NOT NULL,
     media_type  VARCHAR(20)  NOT NULL DEFAULT 'IMAGE',
     sort_order  INT          NOT NULL DEFAULT 0,

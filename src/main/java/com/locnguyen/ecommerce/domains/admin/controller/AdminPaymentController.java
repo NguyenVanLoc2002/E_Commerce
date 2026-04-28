@@ -18,6 +18,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
+import java.util.UUID;
 @Tag(name = "Admin Payment", description = "Admin payment management")
 @RestController
 @RequiredArgsConstructor
@@ -38,7 +39,7 @@ public class AdminPaymentController {
 
     @Operation(summary = "[Admin] Get payment by ID")
     @GetMapping("/{id}")
-    public ApiResponse<PaymentResponse> getById(@PathVariable Long id) {
+    public ApiResponse<PaymentResponse> getById(@PathVariable UUID id) {
         return ApiResponse.success(paymentService.adminGetById(id));
     }
 
@@ -50,7 +51,7 @@ public class AdminPaymentController {
 
     @Operation(summary = "[Admin] Get payment by order ID")
     @GetMapping("/order/{orderId}")
-    public ApiResponse<PaymentResponse> getByOrderId(@PathVariable Long orderId) {
+    public ApiResponse<PaymentResponse> getByOrderId(@PathVariable UUID orderId) {
         return ApiResponse.success(paymentService.adminGetByOrderId(orderId));
     }
 
@@ -61,13 +62,13 @@ public class AdminPaymentController {
                     "Idempotent: calling again on an already-PAID payment is a no-op."
     )
     @PostMapping("/order/{orderId}/complete")
-    public ApiResponse<PaymentResponse> completeCodPayment(@PathVariable Long orderId) {
+    public ApiResponse<PaymentResponse> completeCodPayment(@PathVariable UUID orderId) {
         return ApiResponse.success(paymentService.completeCodPayment(orderId));
     }
 
     @Operation(summary = "[Admin] Get transaction audit trail for a payment")
     @GetMapping("/{id}/transactions")
-    public ApiResponse<List<TransactionResponse>> getTransactions(@PathVariable Long id) {
+    public ApiResponse<List<TransactionResponse>> getTransactions(@PathVariable UUID id) {
         return ApiResponse.success(paymentService.getTransactions(id));
     }
 }

@@ -8,7 +8,24 @@
       "Bash(grep -v \"^T:/Project/ecommerce-platform/src/main/java/com/locnguyen/ecommerce/domains$\")",
       "Bash(mvn test-compile *)",
       "Bash(mvn test *)",
-      "Bash(grep -v \"^$\")"
+      "Bash(grep -v \"^$\")",
+      "Bash(./mvnw test *)",
+      "Bash(git stash *)",
+      "Bash(git -C T:/Project/ecommerce-backend status)",
+      "Bash(git -C T:/Project/ecommerce-backend diff --stat)",
+      "Bash(git *)",
+      "Bash(./mvnw -q compile)",
+      "Bash(./mvnw clean *)",
+      "Bash(grep -E \"Tests run:.*Failures.*Errors.*Skipped$\")",
+      "Bash(./mvnw test-compile *)",
+      "Bash(./mvnw -q dependency:resolve -DincludeArtifactIds=flyway-core,flyway-database-mariadb)",
+      "Bash(./mvnw -q dependency:resolve)",
+      "Bash(./mvnw -q dependency:tree -Dincludes=org.flywaydb)",
+      "Bash(curl -s \"https://repo.maven.apache.org/maven2/org/flywaydb/flyway-database-mariadb/\")",
+      "Bash(curl -sL \"https://repo1.maven.org/maven2/org/flywaydb/flyway-database-mariadb/maven-metadata.xml\")",
+      "Bash(curl -sL \"https://repo1.maven.org/maven2/org/flywaydb/\")",
+      "Bash(curl -sL \"https://repo1.maven.org/maven2/org/flywaydb/flyway-mysql/maven-metadata.xml\")",
+      "Bash(./mvnw dependency:tree -Dincludes=org.flywaydb)"
     ]
   }
 }

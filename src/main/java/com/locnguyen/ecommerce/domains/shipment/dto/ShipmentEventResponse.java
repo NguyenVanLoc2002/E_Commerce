@@ -8,13 +8,14 @@ import lombok.Getter;
 
 import java.time.LocalDateTime;
 
+import java.util.UUID;
 @Getter
 @Builder
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @Schema(description = "A single tracking event on the shipment timeline")
 public class ShipmentEventResponse {
 
-    private final Long id;
+    private final UUID id;
     private final ShipmentStatus status;
     private final String location;
     private final String description;

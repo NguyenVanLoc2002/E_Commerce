@@ -7,16 +7,17 @@ import org.springframework.stereotype.Repository;
 import java.util.List;
 import java.util.Optional;
 
+import java.util.UUID;
 @Repository
-public interface ProductVariantRepository extends JpaRepository<ProductVariant, Long> {
+public interface ProductVariantRepository extends JpaRepository<ProductVariant, UUID> {
 
     boolean existsBySku(String sku);
 
     Optional<ProductVariant> findBySku(String sku);
 
-    Optional<ProductVariant> findByIdAndProductId(Long id, Long productId);
+    Optional<ProductVariant> findByIdAndProductId(UUID id, UUID productId);
 
-    List<ProductVariant> findByProductIdOrderByCreatedAtAsc(Long productId);
+    List<ProductVariant> findByProductIdOrderByCreatedAtAsc(UUID productId);
 
-    long countByProductId(Long productId);
+    long countByProductId(UUID productId);
 }

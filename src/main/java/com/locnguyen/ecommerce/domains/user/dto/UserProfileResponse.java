@@ -11,6 +11,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Set;
 
+import java.util.UUID;
 /**
  * Combined user profile response — merges User (auth) and Customer (profile) data.
  * Returned by GET/PATCH /api/v1/me.
@@ -22,7 +23,7 @@ import java.util.Set;
 public class UserProfileResponse {
 
     @Schema(description = "User ID")
-    private final Long id;
+    private final UUID id;
 
     @Schema(description = "Email (login identifier)")
     private final String email;
@@ -43,7 +44,7 @@ public class UserProfileResponse {
     private final Set<String> roles;
 
     @Schema(description = "Customer ID")
-    private final Long customerId;
+    private final UUID customerId;
 
     @Schema(description = "Gender", example = "MALE")
     private final Gender gender;

@@ -8,6 +8,7 @@ import lombok.Setter;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 
+import java.util.UUID;
 @Getter
 @Setter
 @Schema(description = "Request to create a shipment for an order")
@@ -15,7 +16,7 @@ public class CreateShipmentRequest {
 
     @NotNull
     @Schema(description = "The order to ship. Must be in PROCESSING status.")
-    private Long orderId;
+    private UUID orderId;
 
     @NotBlank
     @Size(max = 100)

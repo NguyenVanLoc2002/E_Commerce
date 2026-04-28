@@ -7,17 +7,18 @@ import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
 
+import java.util.UUID;
 @Data
 @Schema(description = "Adjust stock request — manual inventory adjustment")
 public class AdjustStockRequest {
 
     @NotNull(message = "Variant ID is required")
     @Schema(example = "1", requiredMode = Schema.RequiredMode.REQUIRED)
-    private Long variantId;
+    private UUID variantId;
 
     @NotNull(message = "Warehouse ID is required")
     @Schema(example = "1", requiredMode = Schema.RequiredMode.REQUIRED)
-    private Long warehouseId;
+    private UUID warehouseId;
 
     @NotNull(message = "Quantity is required")
     @Positive(message = "Quantity must be positive")

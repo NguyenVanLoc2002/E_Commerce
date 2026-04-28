@@ -15,6 +15,7 @@ import org.springframework.data.web.PageableDefault;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.UUID;
 @Tag(name = "Notification")
 @RestController
 @RequestMapping(AppConstants.API_V1 + "/notifications")
@@ -43,7 +44,7 @@ public class NotificationController {
     @Operation(summary = "Mark a notification as read")
     @PatchMapping("/{id}/read")
     @PreAuthorize("hasRole('CUSTOMER')")
-    public ApiResponse<NotificationResponse> markAsRead(@PathVariable Long id) {
+    public ApiResponse<NotificationResponse> markAsRead(@PathVariable UUID id) {
         return ApiResponse.success(
                 notificationService.markAsRead(id, userService.getCurrentCustomer()));
     }

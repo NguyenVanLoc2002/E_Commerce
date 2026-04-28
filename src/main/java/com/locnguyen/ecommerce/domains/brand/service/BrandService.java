@@ -26,6 +26,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
+import java.util.UUID;
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -65,7 +66,7 @@ public class BrandService {
      */
     @Cacheable(value = AppConstants.CACHE_BRANDS, key = "'id:' + #id")
     @Transactional(readOnly = true)
-    public BrandResponse getBrandById(Long id) {
+    public BrandResponse getBrandById(UUID id) {
         return brandMapper.toResponse(findOrThrow(id));
     }
 
@@ -90,7 +91,7 @@ public class BrandService {
 
     @CacheEvict(value = AppConstants.CACHE_BRANDS, allEntries = true)
     @Transactional
-    public BrandResponse updateBrand(Long id, UpdateBrandRequest request) {
+    public BrandResponse updateBrand(UUID id, UpdateBrandRequest request) {
         Brand brand = findOrThrow(id);
         if (request.getName() != null) brand.setName(request.getName().trim());
         if (request.getSlug() != null) {
@@ -111,7 +112,7 @@ public class BrandService {
 
     @CacheEvict(value = AppConstants.CACHE_BRANDS, allEntries = true)
     @Transactional
-    public void deleteBrand(Long id) {
+    public void deleteBrand(UUID id) {
         Brand brand = findOrThrow(id);
         String actor = SecurityUtils.getCurrentUsernameOrSystem();
         brand.softDelete(actor);
@@ -120,7 +121,7 @@ public class BrandService {
         auditLogService.log(AuditAction.BRAND_DELETED, "BRAND", String.valueOf(id));
     }
 
-    private Brand findOrThrow(Long id) {
+    private Brand findOrThrow(UUID id) {
         return brandRepository.findById(id)
                 .orElseThrow(() -> new AppException(ErrorCode.BRAND_NOT_FOUND));
     }

@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
+import java.util.UUID;
 /**
  * Admin warehouse management API.
  *
@@ -40,7 +41,7 @@ public class AdminWarehouseController {
 
     @Operation(summary = "Get warehouse by ID")
     @GetMapping("/{id}")
-    public ApiResponse<WarehouseResponse> getWarehouse(@PathVariable Long id) {
+    public ApiResponse<WarehouseResponse> getWarehouse(@PathVariable UUID id) {
         return ApiResponse.success(warehouseService.getWarehouseById(id));
     }
 
@@ -56,7 +57,7 @@ public class AdminWarehouseController {
     @PatchMapping("/{id}")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN')")
     public ApiResponse<WarehouseResponse> updateWarehouse(
-            @PathVariable Long id,
+            @PathVariable UUID id,
             @Valid @RequestBody UpdateWarehouseRequest request) {
         return ApiResponse.success(warehouseService.updateWarehouse(id, request));
     }
@@ -64,7 +65,7 @@ public class AdminWarehouseController {
     @Operation(summary = "Soft-delete warehouse")
     @DeleteMapping("/{id}")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN')")
-    public ApiResponse<Void> deleteWarehouse(@PathVariable Long id) {
+    public ApiResponse<Void> deleteWarehouse(@PathVariable UUID id) {
         warehouseService.deleteWarehouse(id);
         return ApiResponse.noContent();
     }

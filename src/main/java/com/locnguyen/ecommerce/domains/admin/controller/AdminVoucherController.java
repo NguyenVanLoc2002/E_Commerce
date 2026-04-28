@@ -15,6 +15,7 @@ import org.springframework.data.web.PageableDefault;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.UUID;
 /**
  * Admin voucher management API.
  *
@@ -37,7 +38,7 @@ public class AdminVoucherController {
 
     @Operation(summary = "Get voucher by ID")
     @GetMapping("/{id}")
-    public ApiResponse<VoucherResponse> getById(@PathVariable Long id) {
+    public ApiResponse<VoucherResponse> getById(@PathVariable UUID id) {
         return ApiResponse.success(voucherService.getById(id));
     }
 
@@ -58,7 +59,7 @@ public class AdminVoucherController {
     @Operation(summary = "Get usage history for a voucher")
     @GetMapping("/{id}/usages")
     public ApiResponse<PagedResponse<VoucherUsageResponse>> getUsages(
-            @PathVariable Long id,
+            @PathVariable UUID id,
             @PageableDefault(size = AppConstants.DEFAULT_PAGE_SIZE) Pageable pageable) {
         return ApiResponse.success(voucherService.getUsages(id, pageable));
     }
@@ -76,7 +77,7 @@ public class AdminVoucherController {
     @PatchMapping("/{id}")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN')")
     public ApiResponse<VoucherResponse> update(
-            @PathVariable Long id,
+            @PathVariable UUID id,
             @Valid @RequestBody UpdateVoucherRequest request) {
         return ApiResponse.success(voucherService.updateVoucher(id, request));
     }
@@ -84,7 +85,7 @@ public class AdminVoucherController {
     @Operation(summary = "Soft-delete a voucher")
     @DeleteMapping("/{id}")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN')")
-    public ApiResponse<Void> delete(@PathVariable Long id) {
+    public ApiResponse<Void> delete(@PathVariable UUID id) {
         voucherService.deleteVoucher(id);
         return ApiResponse.noContent();
     }

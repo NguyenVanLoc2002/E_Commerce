@@ -5,11 +5,12 @@ import lombok.Setter;
 
 import java.time.LocalDate;
 
+import java.util.UUID;
 @Getter
 @Setter
 public class VoucherFilter {
     private String code;
-    private Long promotionId;
+    private UUID promotionId;
     private Boolean active;
     private LocalDate dateFrom;
     private LocalDate dateTo;

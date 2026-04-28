@@ -24,6 +24,7 @@ import org.springframework.web.servlet.resource.NoResourceFoundException;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import java.util.UUID;
 /**
  * Central exception handler for all controllers.
  *
@@ -163,7 +164,7 @@ public class GlobalExceptionHandler {
     }
 
     /**
-     * 400 — Path or query param has incompatible type (e.g., string for Long id).
+     * 400 — Path or query param has incompatible type (e.g., string for UUID id).
      */
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)
     public ResponseEntity<ErrorResponse> handleTypeMismatch(

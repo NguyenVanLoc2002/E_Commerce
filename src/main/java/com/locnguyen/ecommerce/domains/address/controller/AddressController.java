@@ -19,6 +19,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
+import java.util.UUID;
 @Tag(name = "Address", description = "Customer address management")
 @RestController
 @RequestMapping(AppConstants.API_V1 + "/addresses")
@@ -58,7 +59,7 @@ public class AddressController {
                     content = @Content(schema = @Schema(implementation = com.locnguyen.ecommerce.common.response.ErrorResponse.class)))
     })
     @GetMapping("/{id}")
-    public ApiResponse<AddressResponse> getAddress(@PathVariable Long id) {
+    public ApiResponse<AddressResponse> getAddress(@PathVariable UUID id) {
         return ApiResponse.success(addressService.getAddressById(id));
     }
 
@@ -98,7 +99,7 @@ public class AddressController {
     })
     @PatchMapping("/{id}")
     public ApiResponse<AddressResponse> updateAddress(
-            @PathVariable Long id,
+            @PathVariable UUID id,
             @Valid @RequestBody UpdateAddressRequest request) {
         return ApiResponse.success(addressService.updateAddress(id, request));
     }
@@ -116,7 +117,7 @@ public class AddressController {
                     content = @Content(schema = @Schema(implementation = com.locnguyen.ecommerce.common.response.ErrorResponse.class)))
     })
     @DeleteMapping("/{id}")
-    public ApiResponse<Void> deleteAddress(@PathVariable Long id) {
+    public ApiResponse<Void> deleteAddress(@PathVariable UUID id) {
         addressService.deleteAddress(id);
         return ApiResponse.noContent();
     }

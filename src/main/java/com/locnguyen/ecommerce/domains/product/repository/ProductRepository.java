@@ -13,8 +13,9 @@ import org.springframework.stereotype.Repository;
 
 import java.util.Optional;
 
+import java.util.UUID;
 @Repository
-public interface ProductRepository extends JpaRepository<Product, Long>,
+public interface ProductRepository extends JpaRepository<Product, UUID>,
         JpaSpecificationExecutor<Product> {
 
     boolean existsBySlug(String slug);
@@ -34,5 +35,5 @@ public interface ProductRepository extends JpaRepository<Product, Long>,
             LEFT JOIN FETCH p.media
             WHERE p.id = :id
             """)
-    Optional<Product> findDetailById(@Param("id") Long id);
+    Optional<Product> findDetailById(@Param("id") UUID id);
 }

@@ -6,7 +6,7 @@
 -- ─── Roles ──────────────────────────────────────────────────────────────────
 
 CREATE TABLE roles (
-    id          BIGINT PRIMARY KEY AUTO_INCREMENT,
+    id          CHAR(36) PRIMARY KEY,
     name        VARCHAR(50)  NOT NULL,
     description VARCHAR(255) NULL,
     created_at  DATETIME     NOT NULL,
@@ -19,7 +19,7 @@ CREATE TABLE roles (
 -- ─── Users ──────────────────────────────────────────────────────────────────
 
 CREATE TABLE users (
-    id              BIGINT PRIMARY KEY AUTO_INCREMENT,
+    id              CHAR(36) PRIMARY KEY,
     email           VARCHAR(255) NOT NULL,
     password_hash   VARCHAR(255) NOT NULL,
     first_name      VARCHAR(100) NULL,
@@ -41,8 +41,8 @@ CREATE TABLE users (
 -- ─── User-Roles junction ─────────────────────────────────────────────────────
 
 CREATE TABLE user_roles (
-    user_id BIGINT NOT NULL,
-    role_id BIGINT NOT NULL,
+    user_id CHAR(36) NOT NULL,
+    role_id CHAR(36) NOT NULL,
     CONSTRAINT pk_user_roles     PRIMARY KEY (user_id, role_id),
     CONSTRAINT fk_user_roles_user FOREIGN KEY (user_id) REFERENCES users(id),
     CONSTRAINT fk_user_roles_role FOREIGN KEY (role_id) REFERENCES roles(id)
@@ -56,9 +56,9 @@ CREATE INDEX idx_user_roles_role_id ON user_roles(role_id);
 
 -- ─── Seed default roles ─────────────────────────────────────────────────────
 
-INSERT INTO roles (name, description, created_at, created_by, updated_at, updated_by)
+INSERT INTO roles (id, name, description, created_at, created_by, updated_at, updated_by)
 VALUES
-    ('SUPER_ADMIN', 'Super administrator with full system access',    NOW(), 'system', NOW(), 'system'),
-    ('ADMIN',       'Administrator with management access',           NOW(), 'system', NOW(), 'system'),
-    ('STAFF',       'Staff member with limited management access',   NOW(), 'system', NOW(), 'system'),
-    ('CUSTOMER',    'Registered customer',                            NOW(), 'system', NOW(), 'system');
+    (UUID(), 'SUPER_ADMIN', 'Super administrator with full system access',    NOW(), 'system', NOW(), 'system'),
+    (UUID(), 'ADMIN',       'Administrator with management access',           NOW(), 'system', NOW(), 'system'),
+    (UUID(), 'STAFF',       'Staff member with limited management access',   NOW(), 'system', NOW(), 'system'),
+    (UUID(), 'CUSTOMER',    'Registered customer',                            NOW(), 'system', NOW(), 'system');

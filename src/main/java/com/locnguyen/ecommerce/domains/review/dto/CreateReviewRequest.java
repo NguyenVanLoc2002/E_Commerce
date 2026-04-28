@@ -5,13 +5,14 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.util.UUID;
 @Getter
 @Setter
 @NoArgsConstructor
 public class CreateReviewRequest {
 
     @NotNull(message = "Order item ID is required")
-    private Long orderItemId;
+    private UUID orderItemId;
 
     @NotNull(message = "Rating is required")
     @Min(value = 1, message = "Rating must be at least 1")

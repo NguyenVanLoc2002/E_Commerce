@@ -15,6 +15,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.UUID;
 @Tag(name = "Cart", description = "Shopping cart management")
 @RestController
 @RequiredArgsConstructor
@@ -42,7 +43,7 @@ public class CartController {
     @SecurityRequirement(name = "bearerAuth")
     @PatchMapping("/items/{itemId}")
     public ApiResponse<CartResponse> updateItemQuantity(
-            @PathVariable Long itemId,
+            @PathVariable UUID itemId,
             @Valid @RequestBody UpdateCartItemRequest request) {
         return ApiResponse.success(cartService.updateItemQuantity(
                 userService.getCurrentCustomer(), itemId, request));
@@ -51,7 +52,7 @@ public class CartController {
     @Operation(summary = "Remove item from cart")
     @SecurityRequirement(name = "bearerAuth")
     @DeleteMapping("/items/{itemId}")
-    public ApiResponse<CartResponse> removeItem(@PathVariable Long itemId) {
+    public ApiResponse<CartResponse> removeItem(@PathVariable UUID itemId) {
         return ApiResponse.success(cartService.removeItem(userService.getCurrentCustomer(), itemId));
     }
 

@@ -8,14 +8,15 @@ import lombok.Getter;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
+import java.util.UUID;
 @Getter
 @Builder
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @Schema(description = "Cart item response")
 public class CartItemResponse {
 
-    private final Long id;
-    private final Long variantId;
+    private final UUID id;
+    private final UUID variantId;
     private final String variantName;
     private final String sku;
     private final String productSlug;

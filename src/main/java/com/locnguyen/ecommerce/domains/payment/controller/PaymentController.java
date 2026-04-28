@@ -15,6 +15,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.UUID;
 @Tag(name = "Payment", description = "Payment operations for customers and gateway callbacks")
 @RestController
 @RequiredArgsConstructor
@@ -29,7 +30,7 @@ public class PaymentController {
     @Operation(summary = "Get payment for my order")
     @SecurityRequirement(name = "bearerAuth")
     @GetMapping("/order/{orderId}")
-    public ApiResponse<PaymentResponse> getMyPayment(@PathVariable Long orderId) {
+    public ApiResponse<PaymentResponse> getMyPayment(@PathVariable UUID orderId) {
         return ApiResponse.success(
                 paymentService.getPaymentForCustomer(orderId, userService.getCurrentCustomer()));
     }
@@ -44,7 +45,7 @@ public class PaymentController {
     @ResponseStatus(HttpStatus.CREATED)
     @PostMapping("/order/{orderId}/initiate")
     public ApiResponse<PaymentResponse> initiateOnlinePayment(
-            @PathVariable Long orderId,
+            @PathVariable UUID orderId,
             @Valid @RequestBody(required = false) InitPaymentRequest request) {
         if (request == null) {
             request = new InitPaymentRequest();

@@ -16,6 +16,7 @@ import org.springframework.data.web.PageableDefault;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.UUID;
 /**
  * Admin audit-log query API.
  *
@@ -49,7 +50,7 @@ public class AdminAuditController {
 
     @Operation(summary = "Get audit log entry by ID")
     @GetMapping("/{id}")
-    public ApiResponse<AuditLogResponse> getAuditLog(@PathVariable Long id) {
+    public ApiResponse<AuditLogResponse> getAuditLog(@PathVariable UUID id) {
         return ApiResponse.success(auditLogService.getAuditLogById(id));
     }
 }

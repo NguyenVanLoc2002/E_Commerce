@@ -10,15 +10,16 @@ import org.springframework.data.repository.query.Param;
 
 import java.util.List;
 
-public interface StockMovementRepository extends JpaRepository<StockMovement, Long> {
+import java.util.UUID;
+public interface StockMovementRepository extends JpaRepository<StockMovement, UUID> {
 
-    List<StockMovement> findByVariantIdOrderByCreatedAtDesc(Long variantId);
+    List<StockMovement> findByVariantIdOrderByCreatedAtDesc(UUID variantId);
 
-    List<StockMovement> findByWarehouseIdOrderByCreatedAtDesc(Long warehouseId);
+    List<StockMovement> findByWarehouseIdOrderByCreatedAtDesc(UUID warehouseId);
 
-    Page<StockMovement> findByVariantId(Long variantId, Pageable pageable);
+    Page<StockMovement> findByVariantId(UUID variantId, Pageable pageable);
 
-    Page<StockMovement> findByWarehouseId(Long warehouseId, Pageable pageable);
+    Page<StockMovement> findByWarehouseId(UUID warehouseId, Pageable pageable);
 
     List<StockMovement> findByReferenceTypeAndReferenceIdOrderByCreatedAtDesc(
             String referenceType, String referenceId);
@@ -31,8 +32,8 @@ public interface StockMovementRepository extends JpaRepository<StockMovement, Lo
             "AND (:movementType IS NULL OR sm.movementType = :movementType) " +
             "ORDER BY sm.createdAt DESC")
     Page<StockMovement> filter(
-            @Param("variantId") Long variantId,
-            @Param("warehouseId") Long warehouseId,
+            @Param("variantId") UUID variantId,
+            @Param("warehouseId") UUID warehouseId,
             @Param("movementType") StockMovementType movementType,
             Pageable pageable);
 }

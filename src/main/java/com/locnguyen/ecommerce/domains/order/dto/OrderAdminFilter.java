@@ -5,6 +5,7 @@ import com.locnguyen.ecommerce.domains.order.enums.PaymentStatus;
 import lombok.Getter;
 import lombok.Setter;
 
+import java.util.UUID;
 /**
  * Admin-facing query filter for listing all orders.
  * All fields are optional — omitting a field removes it from the WHERE clause.
@@ -14,7 +15,7 @@ import lombok.Setter;
 public class OrderAdminFilter {
 
     /** Filter by customer ID. */
-    private Long customerId;
+    private UUID customerId;
 
     /** Filter by order status. */
     private OrderStatus status;

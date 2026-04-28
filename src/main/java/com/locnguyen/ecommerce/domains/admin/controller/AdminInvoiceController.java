@@ -19,6 +19,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.UUID;
 @Tag(name = "Admin — Invoices", description = "Invoice generation and management (admin only)")
 @RestController
 @RequiredArgsConstructor
@@ -36,19 +37,19 @@ public class AdminInvoiceController {
     )
     @ResponseStatus(HttpStatus.CREATED)
     @PostMapping("/order/{orderId}/generate")
-    public ApiResponse<InvoiceResponse> generate(@PathVariable Long orderId) {
+    public ApiResponse<InvoiceResponse> generate(@PathVariable UUID orderId) {
         return ApiResponse.created(invoiceService.generateInvoice(orderId));
     }
 
     @Operation(summary = "Get an invoice by ID")
     @GetMapping("/{id}")
-    public ApiResponse<InvoiceResponse> getById(@PathVariable Long id) {
+    public ApiResponse<InvoiceResponse> getById(@PathVariable UUID id) {
         return ApiResponse.success(invoiceService.getById(id));
     }
 
     @Operation(summary = "Get an invoice by order ID")
     @GetMapping("/order/{orderId}")
-    public ApiResponse<InvoiceResponse> getByOrderId(@PathVariable Long orderId) {
+    public ApiResponse<InvoiceResponse> getByOrderId(@PathVariable UUID orderId) {
         return ApiResponse.success(invoiceService.getByOrderId(orderId));
     }
 
@@ -73,7 +74,7 @@ public class AdminInvoiceController {
     )
     @PatchMapping("/{id}/status")
     public ApiResponse<InvoiceResponse> updateStatus(
-            @PathVariable Long id,
+            @PathVariable UUID id,
             @Valid @RequestBody UpdateInvoiceStatusRequest request) {
         return ApiResponse.success(invoiceService.updateStatus(id, request));
     }

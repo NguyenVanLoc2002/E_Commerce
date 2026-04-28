@@ -5,6 +5,7 @@ import lombok.*;
 
 import java.time.LocalDateTime;
 
+import java.util.UUID;
 @Getter
 @Setter
 @NoArgsConstructor
@@ -12,18 +13,18 @@ import java.time.LocalDateTime;
 @Builder
 public class ReviewResponse {
 
-    private Long id;
+    private UUID id;
 
-    private Long customerId;
+    private UUID customerId;
     private String customerName;
 
-    private Long productId;
+    private UUID productId;
     private String productName;
-    private Long variantId;
+    private UUID variantId;
     private String variantName;
     private String sku;
 
-    private Long orderItemId;
+    private UUID orderItemId;
 
     private Integer rating;
     private String comment;

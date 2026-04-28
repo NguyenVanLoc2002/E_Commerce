@@ -16,6 +16,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.UUID;
 @Tag(name = "Admin — Promotions", description = "Promotion and rule management (admin only)")
 @RestController
 @RequiredArgsConstructor
@@ -35,7 +36,7 @@ public class AdminPromotionController {
 
     @Operation(summary = "Get a promotion by ID")
     @GetMapping("/{id}")
-    public ApiResponse<PromotionResponse> getById(@PathVariable Long id) {
+    public ApiResponse<PromotionResponse> getById(@PathVariable UUID id) {
         return ApiResponse.success(promotionService.getById(id));
     }
 
@@ -50,7 +51,7 @@ public class AdminPromotionController {
     @Operation(summary = "Update a promotion")
     @PatchMapping("/{id}")
     public ApiResponse<PromotionResponse> update(
-            @PathVariable Long id,
+            @PathVariable UUID id,
             @Valid @RequestBody UpdatePromotionRequest request) {
         return ApiResponse.success(promotionService.updatePromotion(id, request));
     }
@@ -58,7 +59,7 @@ public class AdminPromotionController {
     @Operation(summary = "Delete (soft-delete) a promotion")
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public ApiResponse<Void> delete(@PathVariable Long id) {
+    public ApiResponse<Void> delete(@PathVariable UUID id) {
         promotionService.deletePromotion(id);
         return ApiResponse.noContent();
     }
@@ -67,7 +68,7 @@ public class AdminPromotionController {
     @ResponseStatus(HttpStatus.CREATED)
     @PostMapping("/{id}/rules")
     public ApiResponse<PromotionResponse> addRule(
-            @PathVariable Long id,
+            @PathVariable UUID id,
             @Valid @RequestBody AddRuleRequest request) {
         return ApiResponse.created(promotionService.addRule(id, request));
     }
@@ -76,8 +77,8 @@ public class AdminPromotionController {
     @DeleteMapping("/{id}/rules/{ruleId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public ApiResponse<PromotionResponse> removeRule(
-            @PathVariable Long id,
-            @PathVariable Long ruleId) {
+            @PathVariable UUID id,
+            @PathVariable UUID ruleId) {
         return ApiResponse.success(promotionService.removeRule(id, ruleId));
     }
 }

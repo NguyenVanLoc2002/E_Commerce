@@ -8,6 +8,7 @@ import lombok.Data;
 
 import java.util.List;
 
+import java.util.UUID;
 @Data
 @Schema(description = "Create product request")
 public class CreateProductRequest {
@@ -29,10 +30,10 @@ public class CreateProductRequest {
     private String description;
 
     @Schema(description = "Brand ID", example = "1")
-    private Long brandId;
+    private UUID brandId;
 
     @Schema(description = "Category IDs")
-    private List<Long> categoryIds;
+    private List<UUID> categoryIds;
 
     @Schema(description = "Product status (DRAFT not visible to public)", example = "DRAFT")
     private ProductStatus status;

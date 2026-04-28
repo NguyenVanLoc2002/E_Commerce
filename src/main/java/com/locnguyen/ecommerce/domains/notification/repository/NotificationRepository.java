@@ -10,13 +10,14 @@ import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDateTime;
 
-public interface NotificationRepository extends JpaRepository<Notification, Long> {
+import java.util.UUID;
+public interface NotificationRepository extends JpaRepository<Notification, UUID> {
 
-    Page<Notification> findByCustomerIdOrderByCreatedAtDesc(Long customerId, Pageable pageable);
+    Page<Notification> findByCustomerIdOrderByCreatedAtDesc(UUID customerId, Pageable pageable);
 
-    long countByCustomerIdAndReadFalse(Long customerId);
+    long countByCustomerIdAndReadFalse(UUID customerId);
 
     @Modifying
     @Query("UPDATE Notification n SET n.read = true, n.readAt = :readAt WHERE n.customer.id = :customerId AND n.read = false")
-    int markAllReadByCustomerId(@Param("customerId") Long customerId, @Param("readAt") LocalDateTime readAt);
+    int markAllReadByCustomerId(@Param("customerId") UUID customerId, @Param("readAt") LocalDateTime readAt);
 }

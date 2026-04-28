@@ -6,13 +6,14 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
 
+import java.util.UUID;
 @Data
 @Schema(description = "Create order request — checkout from cart")
 public class CreateOrderRequest {
 
     @NotNull(message = "Shipping address ID is required")
     @Schema(example = "1", requiredMode = Schema.RequiredMode.REQUIRED)
-    private Long shippingAddressId;
+    private UUID shippingAddressId;
 
     @Schema(example = "COD", description = "Payment method: COD or ONLINE", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private PaymentMethod paymentMethod;

@@ -1,8 +1,6 @@
 package com.locnguyen.ecommerce.domains.product.mapper;
 
-import com.locnguyen.ecommerce.domains.brand.dto.BrandResponse;
 import com.locnguyen.ecommerce.domains.brand.mapper.BrandMapper;
-import com.locnguyen.ecommerce.domains.category.dto.CategoryResponse;
 import com.locnguyen.ecommerce.domains.category.mapper.CategoryMapper;
 import com.locnguyen.ecommerce.domains.product.dto.ProductDetailResponse;
 import com.locnguyen.ecommerce.domains.product.dto.ProductListItemResponse;

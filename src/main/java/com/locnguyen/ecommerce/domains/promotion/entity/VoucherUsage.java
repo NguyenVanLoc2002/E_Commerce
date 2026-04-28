@@ -6,8 +6,11 @@ import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.math.BigDecimal;
+import java.util.UUID;
 
 /**
  * Immutable record of a voucher redemption.
@@ -35,7 +38,8 @@ public class VoucherUsage extends BaseEntity {
 
     /** Plain reference — not a FK so we avoid a circular dependency with the order module. */
     @Column(name = "order_id", nullable = false)
-    private Long orderId;
+    @JdbcTypeCode(SqlTypes.CHAR)
+    private UUID orderId;
 
     @Column(name = "discount_amount", precision = 18, scale = 2, nullable = false)
     private BigDecimal discountAmount;

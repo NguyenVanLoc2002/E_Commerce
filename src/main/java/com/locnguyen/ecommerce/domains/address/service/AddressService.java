@@ -18,6 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
+import java.util.UUID;
 /**
  * Address CRUD service — all operations are scoped to the current customer.
  */
@@ -49,7 +50,7 @@ public class AddressService {
     // ─── Get by ID ───────────────────────────────────────────────────────────
 
     @Transactional(readOnly = true)
-    public AddressResponse getAddressById(Long addressId) {
+    public AddressResponse getAddressById(UUID addressId) {
         Address address = findOwnedAddress(addressId);
         return addressMapper.toResponse(address);
     }
@@ -99,7 +100,7 @@ public class AddressService {
      * If set to false, simply unsets the default flag on this address.
      */
     @Transactional
-    public AddressResponse updateAddress(Long addressId, UpdateAddressRequest request) {
+    public AddressResponse updateAddress(UUID addressId, UpdateAddressRequest request) {
         Address address = findOwnedAddress(addressId);
 
         if (request.getReceiverName() != null) {
@@ -149,7 +150,7 @@ public class AddressService {
      * Does not auto-assign a new default — the customer can set one manually.
      */
     @Transactional
-    public void deleteAddress(Long addressId) {
+    public void deleteAddress(UUID addressId) {
         Address address = findOwnedAddress(addressId);
         String actor = com.locnguyen.ecommerce.common.utils.SecurityUtils.getCurrentUsernameOrSystem();
         address.softDelete(actor);
@@ -164,7 +165,7 @@ public class AddressService {
      * Returns 404 if the address doesn't exist or belongs to another customer
      * (prevents information leakage about other customers' addresses).
      */
-    private Address findOwnedAddress(Long addressId) {
+    private Address findOwnedAddress(UUID addressId) {
         Customer customer = userService.getCurrentCustomer();
         Address address = addressRepository.findById(addressId)
                 .orElseThrow(() -> new AppException(ErrorCode.ADDRESS_NOT_FOUND));

@@ -18,6 +18,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.UUID;
 @Tag(name = "Admin — Reviews", description = "Review moderation (admin only)")
 @RestController
 @RequiredArgsConstructor
@@ -44,7 +45,7 @@ public class AdminReviewController {
 
     @Operation(summary = "Get a review by ID")
     @GetMapping("/{id}")
-    public ApiResponse<ReviewResponse> getById(@PathVariable Long id) {
+    public ApiResponse<ReviewResponse> getById(@PathVariable UUID id) {
         return ApiResponse.success(reviewService.adminGetById(id));
     }
 
@@ -55,7 +56,7 @@ public class AdminReviewController {
     )
     @PatchMapping("/{id}/status")
     public ApiResponse<ReviewResponse> moderate(
-            @PathVariable Long id,
+            @PathVariable UUID id,
             @Valid @RequestBody UpdateReviewStatusRequest request) {
         return ApiResponse.success(reviewService.moderateReview(id, request));
     }

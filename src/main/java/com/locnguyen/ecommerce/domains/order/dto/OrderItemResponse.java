@@ -7,14 +7,15 @@ import lombok.Getter;
 
 import java.math.BigDecimal;
 
+import java.util.UUID;
 @Getter
 @Builder
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @Schema(description = "Order item response — snapshot of product data at checkout")
 public class OrderItemResponse {
 
-    private final Long id;
-    private final Long variantId;
+    private final UUID id;
+    private final UUID variantId;
     private final String productName;
     private final String variantName;
     private final String sku;

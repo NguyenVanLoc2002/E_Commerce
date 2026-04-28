@@ -10,6 +10,7 @@ import lombok.Setter;
 
 import java.util.List;
 
+import java.util.UUID;
 @Getter
 @Setter
 @Schema(description = "Admin request to send a notification to one or more customers")
@@ -33,5 +34,5 @@ public class BroadcastNotificationRequest {
     private String referenceId;
 
     @Schema(description = "Target customer IDs. Leave empty to broadcast to ALL customers.")
-    private List<Long> customerIds;
+    private List<UUID> customerIds;
 }

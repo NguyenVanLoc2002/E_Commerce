@@ -9,13 +9,14 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 
+import java.util.UUID;
 @Getter
 @Builder
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @Schema(description = "Promotion response")
 public class PromotionResponse {
 
-    private final Long id;
+    private final UUID id;
     private final String name;
     private final String description;
     private final String discountType;

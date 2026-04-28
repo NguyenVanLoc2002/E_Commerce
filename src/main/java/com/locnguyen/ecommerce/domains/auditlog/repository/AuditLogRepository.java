@@ -11,8 +11,9 @@ import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDateTime;
 
+import java.util.UUID;
 public interface AuditLogRepository
-        extends JpaRepository<AuditLog, Long>, JpaSpecificationExecutor<AuditLog> {
+        extends JpaRepository<AuditLog, UUID>, JpaSpecificationExecutor<AuditLog> {
 
     Page<AuditLog> findByActorOrderByCreatedAtDesc(String actor, Pageable pageable);
 

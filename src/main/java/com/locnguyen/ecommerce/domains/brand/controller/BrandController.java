@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
+import java.util.UUID;
 /**
  * Public brand catalog endpoints (no authentication required).
  * Admin CRUD lives in {@link com.locnguyen.ecommerce.domains.admin.controller.AdminBrandController}.
@@ -31,7 +32,7 @@ public class BrandController {
 
     @Operation(summary = "Get brand by ID")
     @GetMapping("/{id}")
-    public ApiResponse<BrandResponse> getBrand(@PathVariable Long id) {
+    public ApiResponse<BrandResponse> getBrand(@PathVariable UUID id) {
         return ApiResponse.success(brandService.getBrandById(id));
     }
 }

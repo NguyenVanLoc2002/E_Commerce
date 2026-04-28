@@ -19,6 +19,7 @@ import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.UUID;
 /**
  * Customer-facing order endpoints.
  * Admin order management lives in
@@ -51,7 +52,7 @@ public class OrderController {
 
     @Operation(summary = "Get my order by ID")
     @GetMapping("/{id}")
-    public ApiResponse<OrderResponse> getOrderById(@PathVariable Long id) {
+    public ApiResponse<OrderResponse> getOrderById(@PathVariable UUID id) {
         return ApiResponse.success(orderService.getOrderById(id, userService.getCurrentCustomer()));
     }
 
@@ -60,7 +61,7 @@ public class OrderController {
         description = "Only allowed when status is PENDING or AWAITING_PAYMENT."
     )
     @PostMapping("/my/{id}/cancel")
-    public ApiResponse<OrderResponse> cancelMyOrder(@PathVariable Long id) {
+    public ApiResponse<OrderResponse> cancelMyOrder(@PathVariable UUID id) {
         return ApiResponse.success(orderService.cancelMyOrder(id, userService.getCurrentCustomer()));
     }
 }

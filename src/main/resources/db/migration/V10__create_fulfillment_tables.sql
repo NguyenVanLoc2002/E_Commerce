@@ -8,8 +8,8 @@
 -- Extends BaseEntity (permanent record — no soft delete).
 
 CREATE TABLE shipments (
-    id                      BIGINT PRIMARY KEY AUTO_INCREMENT,
-    order_id                BIGINT         NOT NULL,
+    id                      CHAR(36) PRIMARY KEY,
+    order_id                CHAR(36)         NOT NULL,
     shipment_code           VARCHAR(50)    NOT NULL,
     carrier                 VARCHAR(100)   NOT NULL,          -- e.g. GHTK, GHN, VNPOST, J&T
     tracking_number         VARCHAR(200)   NULL,              -- carrier's own reference
@@ -38,8 +38,8 @@ CREATE INDEX idx_shipments_tracking     ON shipments(tracking_number);
 -- Ordered by event_time for the tracking timeline.
 
 CREATE TABLE shipment_events (
-    id           BIGINT PRIMARY KEY AUTO_INCREMENT,
-    shipment_id  BIGINT         NOT NULL,
+    id           CHAR(36) PRIMARY KEY,
+    shipment_id  CHAR(36)         NOT NULL,
     status       VARCHAR(50)    NOT NULL,              -- ShipmentStatus at this point
     location     VARCHAR(255)   NULL,                  -- e.g. "Ho Chi Minh City hub"
     description  VARCHAR(500)   NOT NULL,
@@ -61,8 +61,8 @@ CREATE INDEX idx_shipment_events_time     ON shipment_events(event_time);
 -- Extends BaseEntity (permanent record — no soft delete).
 
 CREATE TABLE invoices (
-    id                BIGINT PRIMARY KEY AUTO_INCREMENT,
-    order_id          BIGINT         NOT NULL,
+    id                CHAR(36) PRIMARY KEY,
+    order_id          CHAR(36)         NOT NULL,
     invoice_code      VARCHAR(50)    NOT NULL,
     status            VARCHAR(50)    NOT NULL DEFAULT 'ISSUED',
 

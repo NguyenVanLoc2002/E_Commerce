@@ -5,7 +5,7 @@
 -- =====================================================
 
 CREATE TABLE audit_logs (
-    id           BIGINT PRIMARY KEY AUTO_INCREMENT,
+    id           CHAR(36) PRIMARY KEY,
 
     -- What happened
     action       VARCHAR(100)  NOT NULL,   -- e.g. ORDER_CONFIRMED, PRODUCT_DELETED

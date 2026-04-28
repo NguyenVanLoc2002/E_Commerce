@@ -17,6 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
+import java.util.UUID;
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -34,7 +35,7 @@ public class WarehouseService {
     }
 
     @Transactional(readOnly = true)
-    public WarehouseResponse getWarehouseById(Long id) {
+    public WarehouseResponse getWarehouseById(UUID id) {
         return warehouseMapper.toResponse(findOrThrow(id));
     }
 
@@ -58,7 +59,7 @@ public class WarehouseService {
     }
 
     @Transactional
-    public WarehouseResponse updateWarehouse(Long id, UpdateWarehouseRequest request) {
+    public WarehouseResponse updateWarehouse(UUID id, UpdateWarehouseRequest request) {
         Warehouse warehouse = findOrThrow(id);
 
         if (request.getName() != null) {
@@ -77,7 +78,7 @@ public class WarehouseService {
     }
 
     @Transactional
-    public void deleteWarehouse(Long id) {
+    public void deleteWarehouse(UUID id) {
         Warehouse warehouse = findOrThrow(id);
         String actor = SecurityUtils.getCurrentUsernameOrSystem();
         warehouse.softDelete(actor);
@@ -87,7 +88,7 @@ public class WarehouseService {
 
     // ─── Internal ────────────────────────────────────────────────────────────
 
-    Warehouse findOrThrow(Long id) {
+    Warehouse findOrThrow(UUID id) {
         return warehouseRepository.findById(id)
                 .orElseThrow(() -> new AppException(ErrorCode.WAREHOUSE_NOT_FOUND));
     }

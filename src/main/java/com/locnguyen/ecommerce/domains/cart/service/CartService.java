@@ -22,6 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.util.List;
 
+import java.util.UUID;
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -86,7 +87,7 @@ public class CartService {
     }
 
     @Transactional
-    public CartResponse updateItemQuantity(Customer customer, Long itemId, UpdateCartItemRequest request) {
+    public CartResponse updateItemQuantity(Customer customer, UUID itemId, UpdateCartItemRequest request) {
         Cart cart = cartRepository.findByCustomerIdAndStatus(customer.getId(), CartStatus.ACTIVE)
                 .orElseThrow(() -> new AppException(ErrorCode.CART_NOT_FOUND));
 
@@ -106,7 +107,7 @@ public class CartService {
     }
 
     @Transactional
-    public CartResponse removeItem(Customer customer, Long itemId) {
+    public CartResponse removeItem(Customer customer, UUID itemId) {
         Cart cart = cartRepository.findByCustomerIdAndStatus(customer.getId(), CartStatus.ACTIVE)
                 .orElseThrow(() -> new AppException(ErrorCode.CART_NOT_FOUND));
 
@@ -137,7 +138,7 @@ public class CartService {
 
     // ─── Internal ────────────────────────────────────────────────────────────
 
-    private ProductVariant findActiveVariant(Long variantId) {
+    private ProductVariant findActiveVariant(UUID variantId) {
         ProductVariant variant = productVariantRepository.findById(variantId)
                 .orElseThrow(() -> new AppException(ErrorCode.PRODUCT_VARIANT_NOT_FOUND));
         if (variant.getStatus() != ProductVariantStatus.ACTIVE) {
@@ -146,7 +147,7 @@ public class CartService {
         return variant;
     }
 
-    private void validateQuantity(int quantity, Long variantId) {
+    private void validateQuantity(int quantity, UUID variantId) {
         if (quantity <= 0) {
             throw new AppException(ErrorCode.CART_ITEM_QUANTITY_INVALID);
         }

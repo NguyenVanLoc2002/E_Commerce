@@ -5,7 +5,8 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.Optional;
 
-public interface CartRepository extends JpaRepository<Cart, Long> {
+import java.util.UUID;
+public interface CartRepository extends JpaRepository<Cart, UUID> {
 
-    Optional<Cart> findByCustomerIdAndStatus(Long customerId, com.locnguyen.ecommerce.domains.cart.enums.CartStatus status);
+    Optional<Cart> findByCustomerIdAndStatus(UUID customerId, com.locnguyen.ecommerce.domains.cart.enums.CartStatus status);
 }

@@ -11,6 +11,7 @@ import lombok.Getter;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
+import java.util.UUID;
 /**
  * Lightweight order summary for list views — no item details included.
  */
@@ -20,7 +21,7 @@ import java.time.LocalDateTime;
 @Schema(description = "Order list item response — summary for list views")
 public class OrderListItemResponse {
 
-    private final Long id;
+    private final UUID id;
     private final String orderCode;
     private final OrderStatus status;
     private final PaymentMethod paymentMethod;

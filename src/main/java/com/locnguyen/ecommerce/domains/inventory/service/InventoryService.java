@@ -29,6 +29,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.List;
 
+import java.util.UUID;
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -53,20 +54,20 @@ public class InventoryService {
     }
 
     @Transactional(readOnly = true)
-    public List<InventoryResponse> getInventoryByVariant(Long variantId) {
+    public List<InventoryResponse> getInventoryByVariant(UUID variantId) {
         List<Inventory> inventories = inventoryRepository.findByVariantId(variantId);
         return inventories.stream().map(inventoryMapper::toResponse).toList();
     }
 
     @Transactional(readOnly = true)
-    public List<InventoryResponse> getInventoryByWarehouse(Long warehouseId) {
+    public List<InventoryResponse> getInventoryByWarehouse(UUID warehouseId) {
         warehouseService.findOrThrow(warehouseId);
         List<Inventory> inventories = inventoryRepository.findByWarehouseId(warehouseId);
         return inventories.stream().map(inventoryMapper::toResponse).toList();
     }
 
     @Transactional(readOnly = true)
-    public InventoryResponse getInventoryDetail(Long variantId, Long warehouseId) {
+    public InventoryResponse getInventoryDetail(UUID variantId, UUID warehouseId) {
         Inventory inventory = inventoryRepository.findByVariantIdAndWarehouseId(variantId, warehouseId)
                 .orElseThrow(() -> new AppException(ErrorCode.INVENTORY_NOT_FOUND));
         return inventoryMapper.toResponse(inventory);
@@ -87,7 +88,7 @@ public class InventoryService {
      * Import stock — increases on_hand. Creates inventory record if not exists.
      */
     @Transactional
-    public StockMovementResponse importStock(Long variantId, Long warehouseId, int quantity, String note) {
+    public StockMovementResponse importStock(UUID variantId, UUID warehouseId, int quantity, String note) {
         validateVariant(variantId);
         warehouseService.findOrThrow(warehouseId);
 
@@ -119,7 +120,7 @@ public class InventoryService {
      * Export stock — decreases on_hand. Cannot go below reserved count.
      */
     @Transactional
-    public StockMovementResponse exportStock(Long variantId, Long warehouseId, int quantity, String note) {
+    public StockMovementResponse exportStock(UUID variantId, UUID warehouseId, int quantity, String note) {
         validateVariant(variantId);
         warehouseService.findOrThrow(warehouseId);
 
@@ -190,7 +191,7 @@ public class InventoryService {
      * Return stock — increases on_hand (e.g., customer returns goods).
      */
     @Transactional
-    public StockMovementResponse returnStock(Long variantId, Long warehouseId, int quantity,
+    public StockMovementResponse returnStock(UUID variantId, UUID warehouseId, int quantity,
                                               String referenceType, String referenceId) {
         validateVariant(variantId);
         warehouseService.findOrThrow(warehouseId);
@@ -329,7 +330,7 @@ public class InventoryService {
      * Release reserved stock for a specific variant (on order cancel per line item).
      */
     @Transactional
-    public void releaseStockForVariant(String referenceType, String referenceId, Long variantId) {
+    public void releaseStockForVariant(String referenceType, String referenceId, UUID variantId) {
         InventoryReservation reservation = reservationRepository
                 .findByReferenceTypeAndReferenceIdAndVariantIdAndStatus(
                         referenceType, referenceId, variantId, ReservationStatus.PENDING)
@@ -465,13 +466,13 @@ public class InventoryService {
 
     // ─── Internal helpers ────────────────────────────────────────────────────
 
-    private void validateVariant(Long variantId) {
+    private void validateVariant(UUID variantId) {
         if (!productVariantRepository.existsById(variantId)) {
             throw new AppException(ErrorCode.PRODUCT_VARIANT_NOT_FOUND);
         }
     }
 
-    private Inventory getOrCreateInventory(Long variantId, Long warehouseId) {
+    private Inventory getOrCreateInventory(UUID variantId, UUID warehouseId) {
         return inventoryRepository.findByVariantIdAndWarehouseId(variantId, warehouseId)
                 .orElseGet(() -> {
                     Warehouse warehouse = warehouseService.findOrThrow(warehouseId);

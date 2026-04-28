@@ -7,11 +7,12 @@ import lombok.Getter;
 
 import java.time.LocalDateTime;
 
+import java.util.UUID;
 @Getter
 @Builder
 public class AuditLogResponse {
 
-    private final Long id;
+    private final UUID id;
     private final AuditAction action;
     private final String entityType;
     private final String entityId;

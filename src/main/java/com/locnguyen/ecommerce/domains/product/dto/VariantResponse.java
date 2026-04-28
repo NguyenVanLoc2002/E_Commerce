@@ -9,13 +9,14 @@ import lombok.Getter;
 import java.math.BigDecimal;
 import java.util.List;
 
+import java.util.UUID;
 @Getter
 @Builder
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @Schema(description = "Product variant with attributes")
 public class VariantResponse {
 
-    private final Long id;
+    private final UUID id;
     private final String sku;
     private final String barcode;
     private final String variantName;

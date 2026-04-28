@@ -6,13 +6,14 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import java.util.List;
 import java.util.Optional;
 
-public interface CartItemRepository extends JpaRepository<CartItem, Long> {
+import java.util.UUID;
+public interface CartItemRepository extends JpaRepository<CartItem, UUID> {
 
-    List<CartItem> findByCartId(Long cartId);
+    List<CartItem> findByCartId(UUID cartId);
 
-    List<CartItem> findByCartIdOrderByCreatedAtAsc(Long cartId);
+    List<CartItem> findByCartIdOrderByCreatedAtAsc(UUID cartId);
 
-    Optional<CartItem> findByCartIdAndVariantId(Long cartId, Long variantId);
+    Optional<CartItem> findByCartIdAndVariantId(UUID cartId, UUID variantId);
 
-    boolean existsByCartIdAndVariantId(Long cartId, Long variantId);
+    boolean existsByCartIdAndVariantId(UUID cartId, UUID variantId);
 }

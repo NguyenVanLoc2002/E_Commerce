@@ -8,15 +8,16 @@ import lombok.Getter;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
+import java.util.UUID;
 @Getter
 @Builder
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @Schema(description = "Voucher response")
 public class VoucherResponse {
 
-    private final Long id;
+    private final UUID id;
     private final String code;
-    private final Long promotionId;
+    private final UUID promotionId;
     private final String promotionName;
     private final String discountType;
     private final BigDecimal discountValue;

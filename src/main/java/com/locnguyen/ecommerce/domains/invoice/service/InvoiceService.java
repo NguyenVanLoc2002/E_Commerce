@@ -27,6 +27,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.Set;
 
+import java.util.UUID;
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -55,7 +56,7 @@ public class InvoiceService {
      * PENDING and CANCELLED orders cannot be invoiced.
      */
     @Transactional
-    public InvoiceResponse generateInvoice(Long orderId) {
+    public InvoiceResponse generateInvoice(UUID orderId) {
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new AppException(ErrorCode.ORDER_NOT_FOUND));
 
@@ -115,7 +116,7 @@ public class InvoiceService {
      * PAID and VOIDED are terminal — no further updates allowed.
      */
     @Transactional
-    public InvoiceResponse updateStatus(Long invoiceId, UpdateInvoiceStatusRequest request) {
+    public InvoiceResponse updateStatus(UUID invoiceId, UpdateInvoiceStatusRequest request) {
         Invoice invoice = findByIdOrThrow(invoiceId);
 
         if (invoice.getStatus() != InvoiceStatus.ISSUED) {
@@ -140,12 +141,12 @@ public class InvoiceService {
     }
 
     @Transactional(readOnly = true)
-    public InvoiceResponse getById(Long invoiceId) {
+    public InvoiceResponse getById(UUID invoiceId) {
         return invoiceMapper.toResponse(findByIdOrThrow(invoiceId));
     }
 
     @Transactional(readOnly = true)
-    public InvoiceResponse getByOrderId(Long orderId) {
+    public InvoiceResponse getByOrderId(UUID orderId) {
         return invoiceMapper.toResponse(findByOrderIdOrThrow(orderId));
     }
 
@@ -170,7 +171,7 @@ public class InvoiceService {
      * Enforces ownership — throws {@code ORDER_NOT_FOUND} if the order belongs to another customer.
      */
     @Transactional(readOnly = true)
-    public InvoiceResponse getInvoiceForCustomer(Long orderId, Customer customer) {
+    public InvoiceResponse getInvoiceForCustomer(UUID orderId, Customer customer) {
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new AppException(ErrorCode.ORDER_NOT_FOUND));
 
@@ -189,7 +190,7 @@ public class InvoiceService {
      * No-op if the invoice does not exist or is already terminal.
      */
     @Transactional
-    public void markPaidByOrderId(Long orderId) {
+    public void markPaidByOrderId(UUID orderId) {
         invoiceRepository.findByOrderId(orderId).ifPresent(invoice -> {
             if (invoice.getStatus() == InvoiceStatus.ISSUED) {
                 invoice.setStatus(InvoiceStatus.PAID);
@@ -201,12 +202,12 @@ public class InvoiceService {
 
     // ─── Internal helpers ─────────────────────────────────────────────────────
 
-    private Invoice findByIdOrThrow(Long id) {
+    private Invoice findByIdOrThrow(UUID id) {
         return invoiceRepository.findById(id)
                 .orElseThrow(() -> new AppException(ErrorCode.INVOICE_NOT_FOUND));
     }
 
-    private Invoice findByOrderIdOrThrow(Long orderId) {
+    private Invoice findByOrderIdOrThrow(UUID orderId) {
         return invoiceRepository.findByOrderId(orderId)
                 .orElseThrow(() -> new AppException(ErrorCode.INVOICE_NOT_FOUND));
     }

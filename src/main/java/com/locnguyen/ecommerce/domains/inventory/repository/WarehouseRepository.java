@@ -7,7 +7,8 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import java.util.List;
 import java.util.Optional;
 
-public interface WarehouseRepository extends JpaRepository<Warehouse, Long> {
+import java.util.UUID;
+public interface WarehouseRepository extends JpaRepository<Warehouse, UUID> {
 
     boolean existsByCode(String code);
 

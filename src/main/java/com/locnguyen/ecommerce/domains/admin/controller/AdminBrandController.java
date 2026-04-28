@@ -19,6 +19,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.UUID;
 @Tag(name = "Admin — Brand", description = "Brand management for admins")
 @RestController
 @RequestMapping(AppConstants.API_V1 + "/admin/brands")
@@ -48,14 +49,14 @@ public class AdminBrandController {
     @Operation(summary = "Update brand")
     @PatchMapping("/{id}")
     public ApiResponse<BrandResponse> updateBrand(
-            @PathVariable Long id,
+            @PathVariable UUID id,
             @Valid @RequestBody UpdateBrandRequest request) {
         return ApiResponse.success(brandService.updateBrand(id, request));
     }
 
     @Operation(summary = "Delete brand (soft)")
     @DeleteMapping("/{id}")
-    public ApiResponse<Void> deleteBrand(@PathVariable Long id) {
+    public ApiResponse<Void> deleteBrand(@PathVariable UUID id) {
         brandService.deleteBrand(id);
         return ApiResponse.noContent();
     }

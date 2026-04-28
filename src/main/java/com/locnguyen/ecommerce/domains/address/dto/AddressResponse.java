@@ -8,6 +8,7 @@ import lombok.Getter;
 
 import java.time.LocalDateTime;
 
+import java.util.UUID;
 /**
  * Address response DTO — never exposes the customer foreign key.
  */
@@ -18,7 +19,7 @@ import java.time.LocalDateTime;
 public class AddressResponse {
 
     @Schema(description = "Address ID")
-    private final Long id;
+    private final UUID id;
 
     @Schema(description = "Receiver name")
     private final String receiverName;

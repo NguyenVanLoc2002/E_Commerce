@@ -11,6 +11,7 @@ import lombok.Getter;
 import java.time.LocalDateTime;
 import java.util.List;
 
+import java.util.UUID;
 /**
  * Full product detail — includes brand, categories, variants (with attributes), and media.
  */
@@ -20,7 +21,7 @@ import java.util.List;
 @Schema(description = "Product detail with variants and media")
 public class ProductDetailResponse {
 
-    private final Long id;
+    private final UUID id;
     private final String name;
     private final String slug;
     private final String shortDescription;

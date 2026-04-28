@@ -9,8 +9,8 @@
 -- Customer holds profile fields (gender, birthDate, avatar, loyalty).
 
 CREATE TABLE customers (
-    id              BIGINT PRIMARY KEY AUTO_INCREMENT,
-    user_id         BIGINT       NOT NULL,
+    id              CHAR(36) PRIMARY KEY,
+    user_id         CHAR(36)       NOT NULL,
     gender          VARCHAR(20)  NULL,
     birth_date      DATE         NULL,
     avatar_url      VARCHAR(500) NULL,
@@ -30,8 +30,8 @@ CREATE TABLE customers (
 -- Vietnamese address structure: street → ward → district → city.
 
 CREATE TABLE addresses (
-    id              BIGINT PRIMARY KEY AUTO_INCREMENT,
-    customer_id     BIGINT       NOT NULL,
+    id              CHAR(36) PRIMARY KEY,
+    customer_id     CHAR(36)       NOT NULL,
     receiver_name   VARCHAR(100) NOT NULL,
     phone_number    VARCHAR(20)  NOT NULL,
     street_address  VARCHAR(255) NOT NULL,

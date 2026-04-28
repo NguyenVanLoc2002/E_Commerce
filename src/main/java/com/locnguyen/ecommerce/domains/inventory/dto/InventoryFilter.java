@@ -5,15 +5,16 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.ToString;
 
+import java.util.UUID;
 @Getter
 @Setter
 @NoArgsConstructor
 @ToString
 public class InventoryFilter {
 
-    private Long variantId;
-    private Long warehouseId;
-    private Long productId;
+    private UUID variantId;
+    private UUID warehouseId;
+    private UUID productId;
 
     private String sku;
     private String keyword;

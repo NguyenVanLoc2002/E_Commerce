@@ -6,10 +6,11 @@ import lombok.Setter;
 
 import java.time.LocalDate;
 
+import java.util.UUID;
 @Getter
 @Setter
 public class ShipmentFilter {
-    private Long orderId;
+    private UUID orderId;
     private String orderCode;
     private String carrier;
     private ShipmentStatus status;

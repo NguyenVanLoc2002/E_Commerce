@@ -21,6 +21,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
+import java.util.UUID;
 /**
  * Admin inventory management API.
  *
@@ -55,29 +56,29 @@ public class AdminInventoryController {
 
     @Operation(summary = "Get inventory levels for a variant (all warehouses)")
     @GetMapping("/variant/{variantId}")
-    public ApiResponse<List<InventoryResponse>> getInventoryByVariant(@PathVariable Long variantId) {
+    public ApiResponse<List<InventoryResponse>> getInventoryByVariant(@PathVariable UUID variantId) {
         return ApiResponse.success(inventoryService.getInventoryByVariant(variantId));
     }
 
     @Operation(summary = "Get all inventory in a warehouse")
     @GetMapping("/warehouse/{warehouseId}")
-    public ApiResponse<List<InventoryResponse>> getInventoryByWarehouse(@PathVariable Long warehouseId) {
+    public ApiResponse<List<InventoryResponse>> getInventoryByWarehouse(@PathVariable UUID warehouseId) {
         return ApiResponse.success(inventoryService.getInventoryByWarehouse(warehouseId));
     }
 
     @Operation(summary = "Get inventory detail for a specific variant + warehouse combination")
     @GetMapping("/variant/{variantId}/warehouse/{warehouseId}")
     public ApiResponse<InventoryResponse> getInventoryDetail(
-            @PathVariable Long variantId,
-            @PathVariable Long warehouseId) {
+            @PathVariable UUID variantId,
+            @PathVariable UUID warehouseId) {
         return ApiResponse.success(inventoryService.getInventoryDetail(variantId, warehouseId));
     }
 
     @Operation(summary = "Get stock movement history (filterable, paginated)")
     @GetMapping("/movements")
     public ApiResponse<PagedResponse<StockMovementResponse>> getStockMovements(
-            @Parameter(description = "Filter by variant ID") @RequestParam(required = false) Long variantId,
-            @Parameter(description = "Filter by warehouse ID") @RequestParam(required = false) Long warehouseId,
+            @Parameter(description = "Filter by variant ID") @RequestParam(required = false) UUID variantId,
+            @Parameter(description = "Filter by warehouse ID") @RequestParam(required = false) UUID warehouseId,
             @Parameter(description = "Filter by movement type (IMPORT, EXPORT, ADJUSTMENT, RETURN)")
             @RequestParam(required = false) StockMovementType movementType,
             @PageableDefault(size = AppConstants.DEFAULT_PAGE_SIZE) Pageable pageable) {

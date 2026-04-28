@@ -11,6 +11,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.UUID;
 @Tag(name = "Shipments", description = "Shipment tracking for customers")
 @RestController
 @RequiredArgsConstructor
@@ -26,7 +27,7 @@ public class ShipmentController {
     )
     @SecurityRequirement(name = "bearerAuth")
     @GetMapping("/order/{orderId}")
-    public ApiResponse<ShipmentResponse> getMyShipment(@PathVariable Long orderId) {
+    public ApiResponse<ShipmentResponse> getMyShipment(@PathVariable UUID orderId) {
         return ApiResponse.success(
                 shipmentService.getShipmentForCustomer(orderId, userService.getCurrentCustomer()));
     }

@@ -10,6 +10,7 @@ import lombok.Setter;
 import java.math.BigDecimal;
 import java.util.List;
 
+import java.util.UUID;
 @Getter
 @Setter
 @Schema(description = "Request to validate a voucher and preview the discount")
@@ -22,11 +23,11 @@ public class ValidateVoucherRequest {
     private BigDecimal orderAmount;
 
     @Schema(description = "Product IDs in the order (required for PRODUCT-scope promotions)")
-    private List<Long> productIds;
+    private List<UUID> productIds;
 
     @Schema(description = "Category IDs of products in the order (required for CATEGORY-scope)")
-    private List<Long> categoryIds;
+    private List<UUID> categoryIds;
 
     @Schema(description = "Brand IDs of products in the order (required for BRAND-scope)")
-    private List<Long> brandIds;
+    private List<UUID> brandIds;
 }

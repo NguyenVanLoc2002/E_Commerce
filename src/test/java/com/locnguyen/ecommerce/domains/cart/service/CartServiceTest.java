@@ -35,6 +35,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
+import java.util.UUID;
 /**
  * Unit tests for {@link CartService}.
  *
@@ -48,6 +49,8 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class CartServiceTest {
 
+    private static UUID uuid(long n) { return new UUID(0L, n); }
+
     @Mock CartRepository cartRepository;
     @Mock CartItemRepository cartItemRepository;
     @Mock ProductVariantRepository productVariantRepository;
@@ -57,13 +60,13 @@ class CartServiceTest {
 
     // ─── factories ───────────────────────────────────────────────────────────
 
-    private Customer customer(long id) {
+    private Customer customer(UUID id) {
         Customer c = mock(Customer.class);
         when(c.getId()).thenReturn(id);
         return c;
     }
 
-    private Cart cart(long id, Customer customer) {
+    private Cart cart(UUID id, Customer customer) {
         Cart c = new Cart();
         setId(c, id);
         c.setCustomer(customer);
@@ -72,7 +75,7 @@ class CartServiceTest {
         return c;
     }
 
-    private ProductVariant activeVariant(long id, BigDecimal basePrice, BigDecimal salePrice) {
+    private ProductVariant activeVariant(UUID id, BigDecimal basePrice, BigDecimal salePrice) {
         Product product = new Product();
         ReflectionTestUtils.setField(product, "name", "Test Product");
         ReflectionTestUtils.setField(product, "slug", "test-product");
@@ -88,7 +91,7 @@ class CartServiceTest {
         return v;
     }
 
-    private CartItem cartItem(long id, Cart cart, ProductVariant variant, int quantity) {
+    private CartItem cartItem(UUID id, Cart cart, ProductVariant variant, int quantity) {
         CartItem ci = new CartItem();
         setId(ci, id);
         ci.setCart(cart);
@@ -97,7 +100,7 @@ class CartServiceTest {
         return ci;
     }
 
-    private AddCartItemRequest addRequest(long variantId, int quantity) {
+    private AddCartItemRequest addRequest(UUID variantId, int quantity) {
         AddCartItemRequest req = new AddCartItemRequest();
         req.setVariantId(variantId);
         req.setQuantity(quantity);
@@ -110,7 +113,7 @@ class CartServiceTest {
         return req;
     }
 
-    private static void setId(Object entity, Long id) {
+    private static void setId(Object entity, UUID id) {
         ReflectionTestUtils.setField(entity, "id", id);
     }
 
@@ -121,25 +124,25 @@ class CartServiceTest {
 
         @Test
         void returns_existing_active_cart() {
-            Customer cust = customer(1L);
-            Cart existing = cart(5L, cust);
-            when(cartRepository.findByCustomerIdAndStatus(1L, CartStatus.ACTIVE))
+            Customer cust = customer(uuid(1));
+            Cart existing = cart(uuid(5), cust);
+            when(cartRepository.findByCustomerIdAndStatus(uuid(1), CartStatus.ACTIVE))
                     .thenReturn(Optional.of(existing));
 
             Cart result = cartService.getOrCreateCart(cust);
 
-            assertThat(result.getId()).isEqualTo(5L);
+            assertThat(result.getId()).isEqualTo(uuid(5));
             verify(cartRepository, never()).save(any());
         }
 
         @Test
         void creates_new_cart_when_none_exists() {
-            Customer cust = customer(1L);
-            when(cartRepository.findByCustomerIdAndStatus(1L, CartStatus.ACTIVE))
+            Customer cust = customer(uuid(1));
+            when(cartRepository.findByCustomerIdAndStatus(uuid(1), CartStatus.ACTIVE))
                     .thenReturn(Optional.empty());
             when(cartRepository.save(any())).thenAnswer(inv -> {
                 Cart c = inv.getArgument(0);
-                setId(c, 99L);
+                setId(c, uuid(99));
                 return c;
             });
 
@@ -157,13 +160,13 @@ class CartServiceTest {
 
         @Test
         void throws_PRODUCT_VARIANT_NOT_FOUND_when_variant_missing() {
-            Customer cust = customer(1L);
-            Cart c = cart(5L, cust);
-            when(cartRepository.findByCustomerIdAndStatus(1L, CartStatus.ACTIVE))
+            Customer cust = customer(uuid(1));
+            Cart c = cart(uuid(5), cust);
+            when(cartRepository.findByCustomerIdAndStatus(uuid(1), CartStatus.ACTIVE))
                     .thenReturn(Optional.of(c));
-            when(productVariantRepository.findById(99L)).thenReturn(Optional.empty());
+            when(productVariantRepository.findById(uuid(99))).thenReturn(Optional.empty());
 
-            assertThatThrownBy(() -> cartService.addItem(cust, addRequest(99L, 1)))
+            assertThatThrownBy(() -> cartService.addItem(cust, addRequest(uuid(99), 1)))
                     .isInstanceOf(AppException.class)
                     .extracting(e -> ((AppException) e).getErrorCode())
                     .isEqualTo(ErrorCode.PRODUCT_VARIANT_NOT_FOUND);
@@ -171,16 +174,16 @@ class CartServiceTest {
 
         @Test
         void throws_PRODUCT_VARIANT_INACTIVE_when_variant_is_inactive() {
-            Customer cust = customer(1L);
-            Cart c = cart(5L, cust);
-            ProductVariant v = activeVariant(1L, new BigDecimal("100000"), null);
+            Customer cust = customer(uuid(1));
+            Cart c = cart(uuid(5), cust);
+            ProductVariant v = activeVariant(uuid(1), new BigDecimal("100000"), null);
             v.setStatus(ProductVariantStatus.INACTIVE);
 
-            when(cartRepository.findByCustomerIdAndStatus(1L, CartStatus.ACTIVE))
+            when(cartRepository.findByCustomerIdAndStatus(uuid(1), CartStatus.ACTIVE))
                     .thenReturn(Optional.of(c));
-            when(productVariantRepository.findById(1L)).thenReturn(Optional.of(v));
+            when(productVariantRepository.findById(uuid(1))).thenReturn(Optional.of(v));
 
-            assertThatThrownBy(() -> cartService.addItem(cust, addRequest(1L, 1)))
+            assertThatThrownBy(() -> cartService.addItem(cust, addRequest(uuid(1), 1)))
                     .isInstanceOf(AppException.class)
                     .extracting(e -> ((AppException) e).getErrorCode())
                     .isEqualTo(ErrorCode.PRODUCT_VARIANT_INACTIVE);
@@ -188,17 +191,17 @@ class CartServiceTest {
 
         @Test
         void throws_INVENTORY_NOT_ENOUGH_when_requested_exceeds_available() {
-            Customer cust = customer(1L);
-            Cart c = cart(5L, cust);
-            ProductVariant v = activeVariant(1L, new BigDecimal("100000"), null);
+            Customer cust = customer(uuid(1));
+            Cart c = cart(uuid(5), cust);
+            ProductVariant v = activeVariant(uuid(1), new BigDecimal("100000"), null);
 
-            when(cartRepository.findByCustomerIdAndStatus(1L, CartStatus.ACTIVE))
+            when(cartRepository.findByCustomerIdAndStatus(uuid(1), CartStatus.ACTIVE))
                     .thenReturn(Optional.of(c));
-            when(productVariantRepository.findById(1L)).thenReturn(Optional.of(v));
+            when(productVariantRepository.findById(uuid(1))).thenReturn(Optional.of(v));
             // validateQuantity throws before cartItemRepository is ever consulted
-            when(inventoryRepository.sumAvailableByVariantId(1L)).thenReturn(3); // only 3 available
+            when(inventoryRepository.sumAvailableByVariantId(uuid(1))).thenReturn(3); // only 3 available
 
-            assertThatThrownBy(() -> cartService.addItem(cust, addRequest(1L, 5))) // requesting 5
+            assertThatThrownBy(() -> cartService.addItem(cust, addRequest(uuid(1), 5))) // requesting 5
                     .isInstanceOf(AppException.class)
                     .extracting(e -> ((AppException) e).getErrorCode())
                     .isEqualTo(ErrorCode.INVENTORY_NOT_ENOUGH);
@@ -206,15 +209,15 @@ class CartServiceTest {
 
         @Test
         void throws_CART_ITEM_QUANTITY_INVALID_when_quantity_is_zero() {
-            Customer cust = customer(1L);
-            Cart c = cart(5L, cust);
-            ProductVariant v = activeVariant(1L, new BigDecimal("100000"), null);
+            Customer cust = customer(uuid(1));
+            Cart c = cart(uuid(5), cust);
+            ProductVariant v = activeVariant(uuid(1), new BigDecimal("100000"), null);
 
-            when(cartRepository.findByCustomerIdAndStatus(1L, CartStatus.ACTIVE))
+            when(cartRepository.findByCustomerIdAndStatus(uuid(1), CartStatus.ACTIVE))
                     .thenReturn(Optional.of(c));
-            when(productVariantRepository.findById(1L)).thenReturn(Optional.of(v));
+            when(productVariantRepository.findById(uuid(1))).thenReturn(Optional.of(v));
 
-            assertThatThrownBy(() -> cartService.addItem(cust, addRequest(1L, 0)))
+            assertThatThrownBy(() -> cartService.addItem(cust, addRequest(uuid(1), 0)))
                     .isInstanceOf(AppException.class)
                     .extracting(e -> ((AppException) e).getErrorCode())
                     .isEqualTo(ErrorCode.CART_ITEM_QUANTITY_INVALID);
@@ -222,67 +225,67 @@ class CartServiceTest {
 
         @Test
         void creates_new_item_when_variant_not_yet_in_cart() {
-            Customer cust = customer(1L);
-            Cart c = cart(5L, cust);
-            ProductVariant v = activeVariant(1L, new BigDecimal("100000"), null);
+            Customer cust = customer(uuid(1));
+            Cart c = cart(uuid(5), cust);
+            ProductVariant v = activeVariant(uuid(1), new BigDecimal("100000"), null);
 
-            when(cartRepository.findByCustomerIdAndStatus(1L, CartStatus.ACTIVE))
+            when(cartRepository.findByCustomerIdAndStatus(uuid(1), CartStatus.ACTIVE))
                     .thenReturn(Optional.of(c));
-            when(productVariantRepository.findById(1L)).thenReturn(Optional.of(v));
-            when(inventoryRepository.sumAvailableByVariantId(1L)).thenReturn(20);
-            when(cartItemRepository.findByCartIdAndVariantId(5L, 1L)).thenReturn(Optional.empty());
+            when(productVariantRepository.findById(uuid(1))).thenReturn(Optional.of(v));
+            when(inventoryRepository.sumAvailableByVariantId(uuid(1))).thenReturn(20);
+            when(cartItemRepository.findByCartIdAndVariantId(uuid(5), uuid(1))).thenReturn(Optional.empty());
             when(cartItemRepository.save(any())).thenAnswer(inv -> {
                 CartItem ci = inv.getArgument(0);
-                setId(ci, 100L);
+                setId(ci, uuid(100));
                 return ci;
             });
-            when(cartItemRepository.findByCartIdOrderByCreatedAtAsc(5L)).thenReturn(List.of());
+            when(cartItemRepository.findByCartIdOrderByCreatedAtAsc(uuid(5))).thenReturn(List.of());
 
-            cartService.addItem(cust, addRequest(1L, 3));
+            cartService.addItem(cust, addRequest(uuid(1), 3));
 
             verify(cartItemRepository).save(argThat(ci ->
                     ci.getQuantity() == 3
-                    && ci.getVariant().getId() == 1L));
+                    && ci.getVariant().getId() == uuid(1)));
         }
 
         @Test
         void increments_quantity_when_variant_already_in_cart() {
-            Customer cust = customer(1L);
-            Cart c = cart(5L, cust);
-            ProductVariant v = activeVariant(1L, new BigDecimal("100000"), null);
-            CartItem existingItem = cartItem(100L, c, v, 2); // already has qty=2
+            Customer cust = customer(uuid(1));
+            Cart c = cart(uuid(5), cust);
+            ProductVariant v = activeVariant(uuid(1), new BigDecimal("100000"), null);
+            CartItem existingItem = cartItem(uuid(100), c, v, 2); // already has qty=2
 
-            when(cartRepository.findByCustomerIdAndStatus(1L, CartStatus.ACTIVE))
+            when(cartRepository.findByCustomerIdAndStatus(uuid(1), CartStatus.ACTIVE))
                     .thenReturn(Optional.of(c));
-            when(productVariantRepository.findById(1L)).thenReturn(Optional.of(v));
-            when(inventoryRepository.sumAvailableByVariantId(1L)).thenReturn(10);
-            when(cartItemRepository.findByCartIdAndVariantId(5L, 1L))
+            when(productVariantRepository.findById(uuid(1))).thenReturn(Optional.of(v));
+            when(inventoryRepository.sumAvailableByVariantId(uuid(1))).thenReturn(10);
+            when(cartItemRepository.findByCartIdAndVariantId(uuid(5), uuid(1)))
                     .thenReturn(Optional.of(existingItem));
             when(cartItemRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
-            when(cartItemRepository.findByCartIdOrderByCreatedAtAsc(5L))
+            when(cartItemRepository.findByCartIdOrderByCreatedAtAsc(uuid(5)))
                     .thenReturn(List.of(existingItem));
 
-            cartService.addItem(cust, addRequest(1L, 3)); // add 3 more
+            cartService.addItem(cust, addRequest(uuid(1), 3)); // add 3 more
 
             verify(cartItemRepository).save(argThat(ci -> ci.getQuantity() == 5)); // 2 + 3 = 5
         }
 
         @Test
         void throws_INVENTORY_NOT_ENOUGH_when_incremented_total_exceeds_available() {
-            Customer cust = customer(1L);
-            Cart c = cart(5L, cust);
-            ProductVariant v = activeVariant(1L, new BigDecimal("100000"), null);
-            CartItem existingItem = cartItem(100L, c, v, 8); // already has qty=8
+            Customer cust = customer(uuid(1));
+            Cart c = cart(uuid(5), cust);
+            ProductVariant v = activeVariant(uuid(1), new BigDecimal("100000"), null);
+            CartItem existingItem = cartItem(uuid(100), c, v, 8); // already has qty=8
 
-            when(cartRepository.findByCustomerIdAndStatus(1L, CartStatus.ACTIVE))
+            when(cartRepository.findByCustomerIdAndStatus(uuid(1), CartStatus.ACTIVE))
                     .thenReturn(Optional.of(c));
-            when(productVariantRepository.findById(1L)).thenReturn(Optional.of(v));
-            // First validateQuantity(3, 1L) passes, second validateQuantity(8+3=11, 1L) fails
-            when(inventoryRepository.sumAvailableByVariantId(1L)).thenReturn(10); // only 10 available
-            when(cartItemRepository.findByCartIdAndVariantId(5L, 1L))
+            when(productVariantRepository.findById(uuid(1))).thenReturn(Optional.of(v));
+            // First validateQuantity(3, uuid(1)) passes, second validateQuantity(8+3=11, uuid(1)) fails
+            when(inventoryRepository.sumAvailableByVariantId(uuid(1))).thenReturn(10); // only 10 available
+            when(cartItemRepository.findByCartIdAndVariantId(uuid(5), uuid(1)))
                     .thenReturn(Optional.of(existingItem));
 
-            assertThatThrownBy(() -> cartService.addItem(cust, addRequest(1L, 3))) // 8+3=11 > 10
+            assertThatThrownBy(() -> cartService.addItem(cust, addRequest(uuid(1), 3))) // 8+3=11 > 10
                     .isInstanceOf(AppException.class)
                     .extracting(e -> ((AppException) e).getErrorCode())
                     .isEqualTo(ErrorCode.INVENTORY_NOT_ENOUGH);
@@ -296,11 +299,11 @@ class CartServiceTest {
 
         @Test
         void throws_CART_NOT_FOUND_when_customer_has_no_active_cart() {
-            Customer cust = customer(1L);
-            when(cartRepository.findByCustomerIdAndStatus(1L, CartStatus.ACTIVE))
+            Customer cust = customer(uuid(1));
+            when(cartRepository.findByCustomerIdAndStatus(uuid(1), CartStatus.ACTIVE))
                     .thenReturn(Optional.empty());
 
-            assertThatThrownBy(() -> cartService.updateItemQuantity(cust, 100L, updateRequest(2)))
+            assertThatThrownBy(() -> cartService.updateItemQuantity(cust, uuid(100), updateRequest(2)))
                     .isInstanceOf(AppException.class)
                     .extracting(e -> ((AppException) e).getErrorCode())
                     .isEqualTo(ErrorCode.CART_NOT_FOUND);
@@ -308,13 +311,13 @@ class CartServiceTest {
 
         @Test
         void throws_CART_ITEM_NOT_FOUND_when_item_does_not_exist() {
-            Customer cust = customer(1L);
-            Cart c = cart(5L, cust);
-            when(cartRepository.findByCustomerIdAndStatus(1L, CartStatus.ACTIVE))
+            Customer cust = customer(uuid(1));
+            Cart c = cart(uuid(5), cust);
+            when(cartRepository.findByCustomerIdAndStatus(uuid(1), CartStatus.ACTIVE))
                     .thenReturn(Optional.of(c));
-            when(cartItemRepository.findById(100L)).thenReturn(Optional.empty());
+            when(cartItemRepository.findById(uuid(100))).thenReturn(Optional.empty());
 
-            assertThatThrownBy(() -> cartService.updateItemQuantity(cust, 100L, updateRequest(2)))
+            assertThatThrownBy(() -> cartService.updateItemQuantity(cust, uuid(100), updateRequest(2)))
                     .isInstanceOf(AppException.class)
                     .extracting(e -> ((AppException) e).getErrorCode())
                     .isEqualTo(ErrorCode.CART_ITEM_NOT_FOUND);
@@ -322,19 +325,19 @@ class CartServiceTest {
 
         @Test
         void throws_CART_ITEM_NOT_FOUND_when_item_belongs_to_different_cart() {
-            Customer cust = customer(1L);
-            Cart myCart = cart(5L, cust);
+            Customer cust = customer(uuid(1));
+            Cart myCart = cart(uuid(5), cust);
             // Build a foreign cart with a different id — no Customer mock needed
             Cart otherCart = new Cart();
-            setId(otherCart, 99L);
-            ProductVariant v = activeVariant(1L, new BigDecimal("100000"), null);
-            CartItem foreignItem = cartItem(100L, otherCart, v, 1);
+            setId(otherCart, uuid(99));
+            ProductVariant v = activeVariant(uuid(1), new BigDecimal("100000"), null);
+            CartItem foreignItem = cartItem(uuid(100), otherCart, v, 1);
 
-            when(cartRepository.findByCustomerIdAndStatus(1L, CartStatus.ACTIVE))
+            when(cartRepository.findByCustomerIdAndStatus(uuid(1), CartStatus.ACTIVE))
                     .thenReturn(Optional.of(myCart));
-            when(cartItemRepository.findById(100L)).thenReturn(Optional.of(foreignItem));
+            when(cartItemRepository.findById(uuid(100))).thenReturn(Optional.of(foreignItem));
 
-            assertThatThrownBy(() -> cartService.updateItemQuantity(cust, 100L, updateRequest(2)))
+            assertThatThrownBy(() -> cartService.updateItemQuantity(cust, uuid(100), updateRequest(2)))
                     .isInstanceOf(AppException.class)
                     .extracting(e -> ((AppException) e).getErrorCode())
                     .isEqualTo(ErrorCode.CART_ITEM_NOT_FOUND);
@@ -342,17 +345,17 @@ class CartServiceTest {
 
         @Test
         void throws_INVENTORY_NOT_ENOUGH_when_new_quantity_exceeds_stock() {
-            Customer cust = customer(1L);
-            Cart c = cart(5L, cust);
-            ProductVariant v = activeVariant(1L, new BigDecimal("100000"), null);
-            CartItem item = cartItem(100L, c, v, 2);
+            Customer cust = customer(uuid(1));
+            Cart c = cart(uuid(5), cust);
+            ProductVariant v = activeVariant(uuid(1), new BigDecimal("100000"), null);
+            CartItem item = cartItem(uuid(100), c, v, 2);
 
-            when(cartRepository.findByCustomerIdAndStatus(1L, CartStatus.ACTIVE))
+            when(cartRepository.findByCustomerIdAndStatus(uuid(1), CartStatus.ACTIVE))
                     .thenReturn(Optional.of(c));
-            when(cartItemRepository.findById(100L)).thenReturn(Optional.of(item));
-            when(inventoryRepository.sumAvailableByVariantId(1L)).thenReturn(3);
+            when(cartItemRepository.findById(uuid(100))).thenReturn(Optional.of(item));
+            when(inventoryRepository.sumAvailableByVariantId(uuid(1))).thenReturn(3);
 
-            assertThatThrownBy(() -> cartService.updateItemQuantity(cust, 100L, updateRequest(5))) // 5 > 3
+            assertThatThrownBy(() -> cartService.updateItemQuantity(cust, uuid(100), updateRequest(5))) // 5 > 3
                     .isInstanceOf(AppException.class)
                     .extracting(e -> ((AppException) e).getErrorCode())
                     .isEqualTo(ErrorCode.INVENTORY_NOT_ENOUGH);
@@ -360,18 +363,18 @@ class CartServiceTest {
 
         @Test
         void updates_item_quantity_when_within_available_stock() {
-            Customer cust = customer(1L);
-            Cart c = cart(5L, cust);
-            ProductVariant v = activeVariant(1L, new BigDecimal("100000"), null);
-            CartItem item = cartItem(100L, c, v, 2);
+            Customer cust = customer(uuid(1));
+            Cart c = cart(uuid(5), cust);
+            ProductVariant v = activeVariant(uuid(1), new BigDecimal("100000"), null);
+            CartItem item = cartItem(uuid(100), c, v, 2);
 
-            when(cartRepository.findByCustomerIdAndStatus(1L, CartStatus.ACTIVE))
+            when(cartRepository.findByCustomerIdAndStatus(uuid(1), CartStatus.ACTIVE))
                     .thenReturn(Optional.of(c));
-            when(cartItemRepository.findById(100L)).thenReturn(Optional.of(item));
-            when(inventoryRepository.sumAvailableByVariantId(1L)).thenReturn(10);
-            when(cartItemRepository.findByCartIdOrderByCreatedAtAsc(5L)).thenReturn(List.of(item));
+            when(cartItemRepository.findById(uuid(100))).thenReturn(Optional.of(item));
+            when(inventoryRepository.sumAvailableByVariantId(uuid(1))).thenReturn(10);
+            when(cartItemRepository.findByCartIdOrderByCreatedAtAsc(uuid(5))).thenReturn(List.of(item));
 
-            cartService.updateItemQuantity(cust, 100L, updateRequest(7));
+            cartService.updateItemQuantity(cust, uuid(100), updateRequest(7));
 
             assertThat(item.getQuantity()).isEqualTo(7);
         }
@@ -384,11 +387,11 @@ class CartServiceTest {
 
         @Test
         void throws_CART_NOT_FOUND_when_no_active_cart() {
-            Customer cust = customer(1L);
-            when(cartRepository.findByCustomerIdAndStatus(1L, CartStatus.ACTIVE))
+            Customer cust = customer(uuid(1));
+            when(cartRepository.findByCustomerIdAndStatus(uuid(1), CartStatus.ACTIVE))
                     .thenReturn(Optional.empty());
 
-            assertThatThrownBy(() -> cartService.removeItem(cust, 100L))
+            assertThatThrownBy(() -> cartService.removeItem(cust, uuid(100)))
                     .isInstanceOf(AppException.class)
                     .extracting(e -> ((AppException) e).getErrorCode())
                     .isEqualTo(ErrorCode.CART_NOT_FOUND);
@@ -396,18 +399,18 @@ class CartServiceTest {
 
         @Test
         void throws_CART_ITEM_NOT_FOUND_when_item_belongs_to_another_cart() {
-            Customer cust = customer(1L);
-            Cart myCart = cart(5L, cust);
+            Customer cust = customer(uuid(1));
+            Cart myCart = cart(uuid(5), cust);
             Cart otherCart = new Cart();
-            setId(otherCart, 99L);
-            ProductVariant v = activeVariant(1L, new BigDecimal("100000"), null);
-            CartItem foreignItem = cartItem(100L, otherCart, v, 1);
+            setId(otherCart, uuid(99));
+            ProductVariant v = activeVariant(uuid(1), new BigDecimal("100000"), null);
+            CartItem foreignItem = cartItem(uuid(100), otherCart, v, 1);
 
-            when(cartRepository.findByCustomerIdAndStatus(1L, CartStatus.ACTIVE))
+            when(cartRepository.findByCustomerIdAndStatus(uuid(1), CartStatus.ACTIVE))
                     .thenReturn(Optional.of(myCart));
-            when(cartItemRepository.findById(100L)).thenReturn(Optional.of(foreignItem));
+            when(cartItemRepository.findById(uuid(100))).thenReturn(Optional.of(foreignItem));
 
-            assertThatThrownBy(() -> cartService.removeItem(cust, 100L))
+            assertThatThrownBy(() -> cartService.removeItem(cust, uuid(100)))
                     .isInstanceOf(AppException.class)
                     .extracting(e -> ((AppException) e).getErrorCode())
                     .isEqualTo(ErrorCode.CART_ITEM_NOT_FOUND);
@@ -415,17 +418,17 @@ class CartServiceTest {
 
         @Test
         void removes_item_when_ownership_is_valid() {
-            Customer cust = customer(1L);
-            Cart c = cart(5L, cust);
-            ProductVariant v = activeVariant(1L, new BigDecimal("100000"), null);
-            CartItem item = cartItem(100L, c, v, 2);
+            Customer cust = customer(uuid(1));
+            Cart c = cart(uuid(5), cust);
+            ProductVariant v = activeVariant(uuid(1), new BigDecimal("100000"), null);
+            CartItem item = cartItem(uuid(100), c, v, 2);
 
-            when(cartRepository.findByCustomerIdAndStatus(1L, CartStatus.ACTIVE))
+            when(cartRepository.findByCustomerIdAndStatus(uuid(1), CartStatus.ACTIVE))
                     .thenReturn(Optional.of(c));
-            when(cartItemRepository.findById(100L)).thenReturn(Optional.of(item));
-            when(cartItemRepository.findByCartIdOrderByCreatedAtAsc(5L)).thenReturn(List.of());
+            when(cartItemRepository.findById(uuid(100))).thenReturn(Optional.of(item));
+            when(cartItemRepository.findByCartIdOrderByCreatedAtAsc(uuid(5))).thenReturn(List.of());
 
-            cartService.removeItem(cust, 100L);
+            cartService.removeItem(cust, uuid(100));
 
             verify(cartItemRepository).delete(item);
         }
@@ -438,8 +441,8 @@ class CartServiceTest {
 
         @Test
         void throws_CART_NOT_FOUND_when_no_active_cart() {
-            Customer cust = customer(1L);
-            when(cartRepository.findByCustomerIdAndStatus(1L, CartStatus.ACTIVE))
+            Customer cust = customer(uuid(1));
+            when(cartRepository.findByCustomerIdAndStatus(uuid(1), CartStatus.ACTIVE))
                     .thenReturn(Optional.empty());
 
             assertThatThrownBy(() -> cartService.clearCart(cust))
@@ -450,13 +453,13 @@ class CartServiceTest {
 
         @Test
         void clears_all_items_from_the_cart() {
-            Customer cust = customer(1L);
-            Cart c = cart(5L, cust);
-            ProductVariant v = activeVariant(1L, new BigDecimal("100000"), null);
-            c.getItems().add(cartItem(100L, c, v, 2));
-            c.getItems().add(cartItem(101L, c, v, 1));
+            Customer cust = customer(uuid(1));
+            Cart c = cart(uuid(5), cust);
+            ProductVariant v = activeVariant(uuid(1), new BigDecimal("100000"), null);
+            c.getItems().add(cartItem(uuid(100), c, v, 2));
+            c.getItems().add(cartItem(uuid(101), c, v, 1));
 
-            when(cartRepository.findByCustomerIdAndStatus(1L, CartStatus.ACTIVE))
+            when(cartRepository.findByCustomerIdAndStatus(uuid(1), CartStatus.ACTIVE))
                     .thenReturn(Optional.of(c));
             when(cartRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
@@ -473,16 +476,16 @@ class CartServiceTest {
 
         @Test
         void getMyCart_uses_salePrice_when_set_in_lineTotal() {
-            Customer cust = customer(1L);
-            Cart c = cart(5L, cust);
+            Customer cust = customer(uuid(1));
+            Cart c = cart(uuid(5), cust);
             // basePrice=200,000 salePrice=150,000 qty=2 → lineTotal=300,000
-            ProductVariant v = activeVariant(1L, new BigDecimal("200000"), new BigDecimal("150000"));
-            CartItem item = cartItem(100L, c, v, 2);
+            ProductVariant v = activeVariant(uuid(1), new BigDecimal("200000"), new BigDecimal("150000"));
+            CartItem item = cartItem(uuid(100), c, v, 2);
 
-            when(cartRepository.findByCustomerIdAndStatus(1L, CartStatus.ACTIVE))
+            when(cartRepository.findByCustomerIdAndStatus(uuid(1), CartStatus.ACTIVE))
                     .thenReturn(Optional.of(c));
-            when(cartItemRepository.findByCartIdOrderByCreatedAtAsc(5L)).thenReturn(List.of(item));
-            when(inventoryRepository.sumAvailableByVariantId(1L)).thenReturn(10);
+            when(cartItemRepository.findByCartIdOrderByCreatedAtAsc(uuid(5))).thenReturn(List.of(item));
+            when(inventoryRepository.sumAvailableByVariantId(uuid(1))).thenReturn(10);
 
             CartResponse resp = cartService.getMyCart(cust);
 
@@ -492,15 +495,15 @@ class CartServiceTest {
 
         @Test
         void getMyCart_uses_basePrice_when_salePrice_is_null() {
-            Customer cust = customer(1L);
-            Cart c = cart(5L, cust);
-            ProductVariant v = activeVariant(1L, new BigDecimal("100000"), null);
-            CartItem item = cartItem(100L, c, v, 3);
+            Customer cust = customer(uuid(1));
+            Cart c = cart(uuid(5), cust);
+            ProductVariant v = activeVariant(uuid(1), new BigDecimal("100000"), null);
+            CartItem item = cartItem(uuid(100), c, v, 3);
 
-            when(cartRepository.findByCustomerIdAndStatus(1L, CartStatus.ACTIVE))
+            when(cartRepository.findByCustomerIdAndStatus(uuid(1), CartStatus.ACTIVE))
                     .thenReturn(Optional.of(c));
-            when(cartItemRepository.findByCartIdOrderByCreatedAtAsc(5L)).thenReturn(List.of(item));
-            when(inventoryRepository.sumAvailableByVariantId(1L)).thenReturn(10);
+            when(cartItemRepository.findByCartIdOrderByCreatedAtAsc(uuid(5))).thenReturn(List.of(item));
+            when(inventoryRepository.sumAvailableByVariantId(uuid(1))).thenReturn(10);
 
             CartResponse resp = cartService.getMyCart(cust);
 
@@ -509,18 +512,18 @@ class CartServiceTest {
 
         @Test
         void totalItems_is_sum_of_all_item_quantities() {
-            Customer cust = customer(1L);
-            Cart c = cart(5L, cust);
-            ProductVariant v1 = activeVariant(1L, new BigDecimal("100000"), null);
-            ProductVariant v2 = activeVariant(2L, new BigDecimal("50000"), null);
-            CartItem item1 = cartItem(100L, c, v1, 3);
-            CartItem item2 = cartItem(101L, c, v2, 2);
+            Customer cust = customer(uuid(1));
+            Cart c = cart(uuid(5), cust);
+            ProductVariant v1 = activeVariant(uuid(1), new BigDecimal("100000"), null);
+            ProductVariant v2 = activeVariant(uuid(2), new BigDecimal("50000"), null);
+            CartItem item1 = cartItem(uuid(100), c, v1, 3);
+            CartItem item2 = cartItem(uuid(101), c, v2, 2);
 
-            when(cartRepository.findByCustomerIdAndStatus(1L, CartStatus.ACTIVE))
+            when(cartRepository.findByCustomerIdAndStatus(uuid(1), CartStatus.ACTIVE))
                     .thenReturn(Optional.of(c));
-            when(cartItemRepository.findByCartIdOrderByCreatedAtAsc(5L))
+            when(cartItemRepository.findByCartIdOrderByCreatedAtAsc(uuid(5)))
                     .thenReturn(List.of(item1, item2));
-            when(inventoryRepository.sumAvailableByVariantId(anyLong())).thenReturn(10);
+            when(inventoryRepository.sumAvailableByVariantId(any(UUID.class))).thenReturn(10);
 
             CartResponse resp = cartService.getMyCart(cust);
 

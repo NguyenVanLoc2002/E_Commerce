@@ -5,11 +5,12 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
 
+import java.util.UUID;
 @Data
 @Schema(description = "Create category request")
 public class CreateCategoryRequest {
 
-    private Long parentId;
+    private UUID parentId;
 
     @NotBlank(message = "Name is required")
     @Size(max = 100, message = "Name must not exceed 100 characters")
