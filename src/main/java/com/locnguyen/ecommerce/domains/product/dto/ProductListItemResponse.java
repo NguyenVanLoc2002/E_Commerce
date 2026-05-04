@@ -3,9 +3,12 @@ package com.locnguyen.ecommerce.domains.product.dto;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.locnguyen.ecommerce.domains.product.enums.ProductStatus;
 import io.swagger.v3.oas.annotations.media.Schema;
+import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
+import lombok.extern.jackson.Jacksonized;
 
+import java.io.Serializable;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -17,9 +20,12 @@ import java.util.UUID;
  */
 @Getter
 @Builder
+@Jacksonized
+@AllArgsConstructor
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @Schema(description = "Product list item (no variant details)")
-public class ProductListItemResponse {
+public class ProductListItemResponse implements Serializable {
+    private static final long serialVersionUID = 1L;
 
     private final UUID id;
     private final String name;
