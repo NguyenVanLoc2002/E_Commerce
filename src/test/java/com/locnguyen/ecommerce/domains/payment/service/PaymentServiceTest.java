@@ -17,6 +17,7 @@ import com.locnguyen.ecommerce.domains.payment.enums.TransactionStatus;
 import com.locnguyen.ecommerce.domains.payment.mapper.PaymentMapper;
 import com.locnguyen.ecommerce.domains.payment.repository.PaymentRepository;
 import com.locnguyen.ecommerce.domains.payment.repository.PaymentTransactionRepository;
+import com.locnguyen.ecommerce.domains.payment.service.impl.PaymentServiceImpl;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -57,7 +58,7 @@ class PaymentServiceTest {
     @Mock OrderRepository orderRepository;
     @Mock PaymentMapper paymentMapper;
 
-    @InjectMocks PaymentService paymentService;
+    @InjectMocks PaymentServiceImpl paymentService;
 
     // ─── factories ───────────────────────────────────────────────────────────
 

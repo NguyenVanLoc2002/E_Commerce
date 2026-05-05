@@ -11,7 +11,6 @@ import jakarta.persistence.criteria.Predicate;
 import jakarta.persistence.criteria.Root;
 import jakarta.persistence.criteria.Subquery;
 import org.springframework.data.jpa.domain.Specification;
-import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
@@ -19,7 +18,11 @@ import java.util.List;
 
 /**
  * Dynamic JPA Specification for product list queries.
- * Builds predicates from optional {@link ProductFilter} fields.
+ *
+ * <p>Handles non-keyword filters only. Keyword search is routed to the
+ * FULLTEXT path in
+ * {@link com.locnguyen.ecommerce.domains.product.repository.ProductSearchRepository}
+ * — see {@link com.locnguyen.ecommerce.domains.product.service.impl.ProductServiceImpl}.
  */
 public final class ProductSpecification {
 
@@ -36,11 +39,6 @@ public final class ProductSpecification {
                     filter != null ? filter.getIsDeleted() : null,
                     filter != null ? filter.getIncludeDeleted() : null
             );
-
-            if (filter != null && StringUtils.hasText(filter.getKeyword())) {
-                String pattern = "%" + filter.getKeyword().toLowerCase().trim() + "%";
-                predicates.add(cb.like(cb.lower(root.get("name")), pattern));
-            }
 
             if (filter != null && filter.getCategoryId() != null) {
                 Join<Object, Object> categoryJoin = root.join("categories", JoinType.INNER);
@@ -59,23 +57,26 @@ public final class ProductSpecification {
                 predicates.add(cb.equal(root.get("featured"), filter.getFeatured()));
             }
 
-            if (filter != null && filter.getMinPrice() != null) {
+            // Price range: min and max must match the SAME variant, otherwise a product
+            // whose cheap variant satisfies min and whose expensive variant satisfies
+            // max would be incorrectly returned for narrow [min, max] windows.
+            // Variant soft-delete is honored.
+            if (filter != null && (filter.getMinPrice() != null || filter.getMaxPrice() != null)) {
                 Subquery<Long> sq = query.subquery(Long.class);
                 Root<ProductVariant> pv = sq.from(ProductVariant.class);
                 Expression<BigDecimal> price = cb.coalesce(pv.get("salePrice"), pv.get("basePrice"));
-                sq.select(cb.literal(1L))
-                        .where(cb.equal(pv.get("product"), root),
-                                cb.ge(price, filter.getMinPrice()));
-                predicates.add(cb.exists(sq));
-            }
 
-            if (filter != null && filter.getMaxPrice() != null) {
-                Subquery<Long> sq = query.subquery(Long.class);
-                Root<ProductVariant> pv = sq.from(ProductVariant.class);
-                Expression<BigDecimal> price = cb.coalesce(pv.get("salePrice"), pv.get("basePrice"));
+                List<Predicate> variantPredicates = new ArrayList<>();
+                variantPredicates.add(cb.equal(pv.get("product"), root));
+                variantPredicates.add(cb.isFalse(pv.get("deleted")));
+                if (filter.getMinPrice() != null) {
+                    variantPredicates.add(cb.ge(price, filter.getMinPrice()));
+                }
+                if (filter.getMaxPrice() != null) {
+                    variantPredicates.add(cb.le(price, filter.getMaxPrice()));
+                }
                 sq.select(cb.literal(1L))
-                        .where(cb.equal(pv.get("product"), root),
-                                cb.le(price, filter.getMaxPrice()));
+                        .where(variantPredicates.toArray(new Predicate[0]));
                 predicates.add(cb.exists(sq));
             }
 

@@ -294,6 +294,19 @@ These non-admin paths exist in code but are admin/staff endpoints, not customer 
 - Pagination:
   - `page`, `size`, `sort`
   - default: `size=20`, `sort=createdAt,desc`
+- Keyword search:
+  - When `keyword` is blank the service uses the standard JPA Specification path.
+  - When `keyword` has text the service runs a MariaDB FULLTEXT query against
+    `MATCH(products.name, products.slug, products.search_text)` in BOOLEAN MODE.
+  - Search is **case-insensitive** and **accent-insensitive** (`Áo` matches `ao`,
+    `đầm` matches `dam`) — input is normalised through `SearchTextNormalizer`.
+  - Results with a keyword are ordered by FULLTEXT relevance first, then by the
+    requested `sort` (whitelisted columns: `createdAt`, `updatedAt`, `name`,
+    `status`, `featured`).
+  - `minPrice` / `maxPrice` must match the **same** variant; soft-deleted
+    variants are ignored.
+  - Soft-deleted products are always excluded from this public endpoint.
+  - Internal column `products.search_text` is **never** returned in the response.
 - Response:
   - `ApiResponse<PagedResponse<ProductListItemResponse>>`
 

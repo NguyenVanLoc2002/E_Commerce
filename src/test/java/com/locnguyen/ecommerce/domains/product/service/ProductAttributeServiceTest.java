@@ -9,6 +9,7 @@ import com.locnguyen.ecommerce.domains.product.enums.AttributeType;
 import com.locnguyen.ecommerce.domains.product.mapper.ProductAttributeMapper;
 import com.locnguyen.ecommerce.domains.product.repository.ProductAttributeRepository;
 import com.locnguyen.ecommerce.domains.product.repository.ProductAttributeValueRepository;
+import com.locnguyen.ecommerce.domains.product.service.impl.ProductAttributeServiceImpl;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -41,7 +42,7 @@ class ProductAttributeServiceTest {
     @Mock ProductAttributeValueRepository valueRepository;
     @Spy ProductAttributeMapper attributeMapper = new ProductAttributeMapper();
 
-    @InjectMocks ProductAttributeService service;
+    @InjectMocks ProductAttributeServiceImpl service;
 
     // ─── factories ───────────────────────────────────────────────────────────
 

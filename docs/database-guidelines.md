@@ -209,6 +209,29 @@ Quá nhiều index sẽ làm chậm:
 
 Chỉ index field thực sự cần.
 
+### 8.5. FULLTEXT index cho keyword search
+
+- Modules có nhu cầu keyword search phức tạp (ví dụ products) **không** dùng
+  `LIKE '%keyword%'` cho mặc định vì sẽ gây full table scan.
+- Thay vào đó: tạo cột denormalized dạng `TEXT NULL` (ví dụ
+  `products.search_text`) và đánh `FULLTEXT` index trên các cột text liên quan
+  (ví dụ `FULLTEXT(name, slug, search_text)`).
+- Quy ước:
+  - Cột denormalized luôn lowercase, đã strip Vietnamese accents, đã thay
+    `đ`/`Đ` thành `d`/`D` qua `SearchTextNormalizer`.
+  - Service layer phải build/refresh giá trị này khi tạo/cập nhật entity, và
+    rebuild khi các field nguồn thay đổi (name, slug, brand, categories...).
+  - Sau khi deploy migration, chạy reindex endpoint để backfill dữ liệu cũ.
+  - Cột `search_text` là **internal**, không bao giờ trả ra public API.
+- Truy vấn:
+  - `MATCH(name, slug, search_text) AGAINST (? IN BOOLEAN MODE)` — toàn bộ
+    user input phải được normalize và escape các ký tự BOOLEAN MODE
+    (`+ - > < ( ) ~ * " @`) trước khi nối thành `+term*`.
+  - Order by `MATCH(...)` DESC trước, sau đó mới đến `Pageable.sort` (chỉ
+    cho phép các cột nằm trong allow-list).
+- MariaDB là search engine duy nhất ở giai đoạn này. Không introduce
+  Elasticsearch.
+
 ---
 
 ## 9. Unique constraint guideline

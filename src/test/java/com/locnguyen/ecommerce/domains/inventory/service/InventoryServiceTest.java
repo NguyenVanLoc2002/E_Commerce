@@ -13,6 +13,7 @@ import com.locnguyen.ecommerce.domains.inventory.mapper.InventoryMapper;
 import com.locnguyen.ecommerce.domains.inventory.repository.InventoryRepository;
 import com.locnguyen.ecommerce.domains.inventory.repository.InventoryReservationRepository;
 import com.locnguyen.ecommerce.domains.inventory.repository.StockMovementRepository;
+import com.locnguyen.ecommerce.domains.inventory.service.impl.InventoryServiceImpl;
 import com.locnguyen.ecommerce.domains.productvariant.entity.ProductVariant;
 import com.locnguyen.ecommerce.domains.productvariant.repository.ProductVariantRepository;
 import org.junit.jupiter.api.Nested;
@@ -56,7 +57,7 @@ class InventoryServiceTest {
     @Mock ProductVariantRepository productVariantRepository;
     @Mock InventoryMapper inventoryMapper;
 
-    @InjectMocks InventoryService inventoryService;
+    @InjectMocks InventoryServiceImpl inventoryService;
 
     // ─── factories ───────────────────────────────────────────────────────────
 

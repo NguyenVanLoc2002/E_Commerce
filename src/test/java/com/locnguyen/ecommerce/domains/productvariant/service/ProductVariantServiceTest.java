@@ -14,6 +14,7 @@ import com.locnguyen.ecommerce.domains.product.repository.ProductAttributeValueR
 import com.locnguyen.ecommerce.domains.product.repository.ProductRepository;
 import com.locnguyen.ecommerce.domains.productvariant.entity.ProductVariant;
 import com.locnguyen.ecommerce.domains.productvariant.repository.ProductVariantRepository;
+import com.locnguyen.ecommerce.domains.productvariant.service.impl.ProductVariantServiceImpl;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -43,7 +44,7 @@ class ProductVariantServiceTest {
     @Mock ProductAttributeValueRepository attributeValueRepository;
     @Spy  ProductVariantMapper variantMapper = new ProductVariantMapper();
 
-    @InjectMocks ProductVariantService service;
+    @InjectMocks ProductVariantServiceImpl service;
 
     // ─── factories ───────────────────────────────────────────────────────────
 

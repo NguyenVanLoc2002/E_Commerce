@@ -60,6 +60,15 @@ public class Product extends SoftDeleteEntity {
     @Column(name = "description", columnDefinition = "TEXT")
     private String description;
 
+    /**
+     * Denormalized lowercase, accent-stripped concatenation of name, slug,
+     * brand and category names. Backs the FULLTEXT index on {@code products}.
+     * Internal — never serialized to public API responses.
+     */
+    @Column(name = "search_text", columnDefinition = "TEXT")
+    @ToString.Exclude
+    private String searchText;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "status", length = 50, nullable = false)
     private ProductStatus status = ProductStatus.DRAFT;

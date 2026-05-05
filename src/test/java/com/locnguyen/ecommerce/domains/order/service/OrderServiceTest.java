@@ -25,6 +25,7 @@ import com.locnguyen.ecommerce.domains.order.enums.PaymentStatus;
 import com.locnguyen.ecommerce.domains.order.mapper.OrderMapper;
 import com.locnguyen.ecommerce.domains.order.repository.OrderItemRepository;
 import com.locnguyen.ecommerce.domains.order.repository.OrderRepository;
+import com.locnguyen.ecommerce.domains.order.service.impl.OrderServiceImpl;
 import com.locnguyen.ecommerce.domains.notification.service.NotificationService;
 import com.locnguyen.ecommerce.domains.payment.service.PaymentService;
 import com.locnguyen.ecommerce.domains.product.entity.Product;
@@ -79,7 +80,7 @@ class OrderServiceTest {
     @Mock AuditLogService auditLogService;
     @Mock NotificationService notificationService;
 
-    @InjectMocks OrderService orderService;
+    @InjectMocks OrderServiceImpl orderService;
 
     // ─── factories ───────────────────────────────────────────────────────────
 

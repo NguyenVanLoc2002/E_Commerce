@@ -35,7 +35,13 @@
       "Bash(./mvnw -o test)",
       "Bash(./mvnw -q -DskipTests compile)",
       "Bash(./mvnw -DskipTests compile)",
-      "Bash(./mvnw -q test)"
+      "Bash(./mvnw -q test)",
+      "Bash(xargs wc *)",
+      "Bash(mkdir -p \"T:/Project/ecommerce-backend/src/main/java/com/locnguyen/ecommerce/domains/inventory/service/impl\")",
+      "Bash(mkdir -p \"T:/Project/ecommerce-backend/src/main/java/com/locnguyen/ecommerce/domains/brand/service/impl\")",
+      "Bash(mkdir -p \"T:/Project/ecommerce-backend/src/main/java/com/locnguyen/ecommerce/domains/category/service/impl\")",
+      "Bash(mkdir -p \"T:/Project/ecommerce-backend/src/main/java/com/locnguyen/ecommerce/domains/user/service/impl\")",
+      "Bash(mkdir -p \"T:/Project/ecommerce-backend/src/main/java/com/locnguyen/ecommerce/domains/notification/service/impl\")"
     ]
   }
 }
