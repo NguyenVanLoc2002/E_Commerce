@@ -41,7 +41,23 @@
       "Bash(mkdir -p \"T:/Project/ecommerce-backend/src/main/java/com/locnguyen/ecommerce/domains/brand/service/impl\")",
       "Bash(mkdir -p \"T:/Project/ecommerce-backend/src/main/java/com/locnguyen/ecommerce/domains/category/service/impl\")",
       "Bash(mkdir -p \"T:/Project/ecommerce-backend/src/main/java/com/locnguyen/ecommerce/domains/user/service/impl\")",
-      "Bash(mkdir -p \"T:/Project/ecommerce-backend/src/main/java/com/locnguyen/ecommerce/domains/notification/service/impl\")"
+      "Bash(mkdir -p \"T:/Project/ecommerce-backend/src/main/java/com/locnguyen/ecommerce/domains/notification/service/impl\")",
+      "Bash(./mvnw.cmd -q -DskipTests compile)",
+      "PowerShell(.\\\\mvnw.cmd -q -DskipTests compile)",
+      "PowerShell(.\\\\mvnw.cmd -DskipTests compile 2>&1 | Select-Object -Last 60)",
+      "PowerShell(.\\\\mvnw.cmd clean -DskipTests compile 2>&1 | Select-Object -Last 80)",
+      "PowerShell(.\\\\mvnw.cmd test-compile 2>&1 | Select-Object -Last 80)",
+      "PowerShell(.\\\\mvnw.cmd test \"-Dtest=OtpServiceTest,PasswordResetServiceImplTest,ChangePasswordServiceImplTest,PasswordResetControllerTest,AccountControllerTest,AuthControllerTest\" 2>&1 | Select-Object -Last 80)",
+      "PowerShell(.\\\\mvnw.cmd verify 2>&1 | Select-Object -Last 50)",
+      "PowerShell(.\\\\mvnw.cmd flyway:info 2>&1 | Select-Object -Last 50)",
+      "PowerShell(Get-Command *)",
+      "PowerShell(.\\\\mvnw.cmd -DskipTests \"-Dflyway.url=jdbc:mariadb://localhost:3306/ecommerce_dev\" \"-Dflyway.user=root\" \"-Dflyway.password=0986045812a\" flyway:info 2>&1 | Select-Object -Last 40)",
+      "PowerShell(.\\\\mvnw.cmd -DskipTests \"-Dflyway.url=jdbc:mariadb://localhost:3306/ecommerce_dev\" \"-Dflyway.user=root\" \"-Dflyway.password=0986045812a\" flyway:repair 2>&1 | Select-Object -Last 25)",
+      "PowerShell(.\\\\mvnw.cmd -DskipTests \"-Dflyway.url=jdbc:mariadb://localhost:3306/ecommerce_dev\" \"-Dflyway.user=root\" \"-Dflyway.password=0986045812a\" flyway:migrate 2>&1 | Select-Object -Last 60)",
+      "PowerShell(.\\\\mvnw.cmd -DskipTests \"-Dflyway.url=jdbc:mariadb://localhost:3306/ecommerce_dev\" \"-Dflyway.user=root\" \"-Dflyway.password=0986045812a\" flyway:repair 2>&1 | Select-Object -Last 15)",
+      "PowerShell(.\\\\mvnw.cmd -DskipTests \"-Dflyway.url=jdbc:mariadb://localhost:3306/ecommerce_dev\" \"-Dflyway.user=root\" \"-Dflyway.password=0986045812a\" flyway:migrate 2>&1 | Select-Object -Last 25)",
+      "PowerShell(.\\\\mvnw.cmd verify 2>&1 | Select-Object -Last 30)",
+      "PowerShell(.\\\\mvnw.cmd verify 2>&1 | Select-Object -Last 20)"
     ]
   }
 }

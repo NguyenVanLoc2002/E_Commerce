@@ -302,7 +302,11 @@ public class AuthServiceImpl implements AuthService {
         if (refreshTokenFromCookie != null && !refreshTokenFromCookie.isBlank()) {
             return refreshTokenFromCookie;
         }
-        if (refreshTokenFromBody != null && !refreshTokenFromBody.isBlank()) {
+        boolean bodyFallbackEnabled = appProperties.getSecurity().isRefreshTokenBodyFallbackEnabled();
+        if (bodyFallbackEnabled
+                && refreshTokenFromBody != null
+                && !refreshTokenFromBody.isBlank()) {
+            log.warn("Refresh token resolved from deprecated request-body fallback");
             return refreshTokenFromBody;
         }
         throw new AppException(ErrorCode.REFRESH_TOKEN_INVALID);

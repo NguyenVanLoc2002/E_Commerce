@@ -4,11 +4,16 @@ import com.locnguyen.ecommerce.common.constants.AppConstants;
 import com.locnguyen.ecommerce.common.response.ApiResponse;
 import com.locnguyen.ecommerce.common.security.RefreshTokenCookieService;
 import com.locnguyen.ecommerce.domains.auth.dto.AuthResponse;
+import com.locnguyen.ecommerce.domains.auth.dto.ForgotPasswordRequest;
 import com.locnguyen.ecommerce.domains.auth.dto.LoginRequest;
 import com.locnguyen.ecommerce.domains.auth.dto.RefreshTokenRequest;
 import com.locnguyen.ecommerce.domains.auth.dto.RegisterRequest;
+import com.locnguyen.ecommerce.domains.auth.dto.ResetPasswordRequest;
+import com.locnguyen.ecommerce.domains.auth.dto.ResetTokenResponse;
 import com.locnguyen.ecommerce.domains.auth.dto.TokenResponse;
+import com.locnguyen.ecommerce.domains.auth.dto.VerifyOtpRequest;
 import com.locnguyen.ecommerce.domains.auth.service.AuthService;
+import com.locnguyen.ecommerce.domains.auth.service.PasswordResetService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -34,6 +39,7 @@ public class AuthController {
 
     private final AuthService authService;
     private final RefreshTokenCookieService refreshTokenCookieService;
+    private final PasswordResetService passwordResetService;
 
     @Operation(
             summary = "Register a new customer account",
@@ -135,6 +141,39 @@ public class AuthController {
                 refreshTokenCookieService.extractRefreshToken(request)
         );
         refreshTokenCookieService.clearRefreshTokenCookie(response);
+        return ApiResponse.noContent();
+    }
+
+    @Operation(
+            summary = "Request a password-reset OTP",
+            description = "Always returns 200 regardless of whether the email exists, " +
+                    "to avoid leaking which addresses are registered."
+    )
+    @PostMapping("/password/forgot")
+    public ApiResponse<Void> forgotPassword(@Valid @RequestBody ForgotPasswordRequest request) {
+        passwordResetService.requestPasswordReset(request.getEmail());
+        return ApiResponse.noContent();
+    }
+
+    @Operation(
+            summary = "Verify a password-reset OTP",
+            description = "On success, returns a one-shot reset token to be used by /password/reset."
+    )
+    @PostMapping("/password/forgot/verify")
+    public ApiResponse<ResetTokenResponse> verifyForgotPasswordOtp(
+            @Valid @RequestBody VerifyOtpRequest request) {
+        ResetTokenResponse response =
+                passwordResetService.verifyOtpAndIssueResetToken(request.getEmail(), request.getOtp());
+        return ApiResponse.success(response);
+    }
+
+    @Operation(
+            summary = "Reset password using a reset token",
+            description = "Consumes the reset token, updates the password, and revokes all active refresh sessions."
+    )
+    @PostMapping("/password/reset")
+    public ApiResponse<Void> resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
+        passwordResetService.resetPassword(request);
         return ApiResponse.noContent();
     }
 

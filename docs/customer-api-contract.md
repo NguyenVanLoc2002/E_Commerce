@@ -153,11 +153,48 @@ These non-admin paths exist in code but are admin/staff endpoints, not customer 
 - Refresh tokens carry session identity (`jti`) plus principal and family claims for server-side validation and revocation.
 - `AuthService.revokeAllRefreshSessions(principalType, principalId)` is available for a future password-change integration.
 
+### POST `/api/v1/auth/password/forgot`
+
+- Access: public, no token required.
+- Description: request a password-reset OTP. Always returns 200 to avoid leaking which emails are registered.
+- Request body: `ForgotPasswordRequest { email }`.
+- Response: `ApiResponse<Void>` (`code: SUCCESS`).
+- Side effects (when the email belongs to an active account):
+  - issues a 6-digit OTP, stored as a SHA-256 hash with a server pepper
+  - dispatches the OTP via `EmailSender`
+  - increments the per-target rate-limit counters (Redis)
+- Errors: `OTP_RATE_LIMITED` (429) when the cooldown / window limit is exceeded.
+
+### POST `/api/v1/auth/password/forgot/verify`
+
+- Access: public.
+- Description: verify the OTP and obtain a one-shot reset token.
+- Request body: `VerifyOtpRequest { email, otp }`.
+- Response: `ApiResponse<ResetTokenResponse { resetToken, expiresAt }>`.
+- Errors: `OTP_INVALID`, `OTP_EXPIRED`, `OTP_USED`, `OTP_TOO_MANY_ATTEMPTS`.
+
+### POST `/api/v1/auth/password/reset`
+
+- Access: public.
+- Description: consume the reset token, update the password, revoke all refresh sessions.
+- Request body: `ResetPasswordRequest { resetToken, newPassword, confirmPassword }`.
+- Password policy: min 8 chars, requires uppercase, lowercase, digit; cannot equal the current password.
+- Response: `ApiResponse<Void>`.
+- Errors: `RESET_TOKEN_INVALID`, `RESET_TOKEN_EXPIRED`, `PASSWORD_MISMATCH`, `PASSWORD_POLICY_VIOLATED`, `PASSWORD_REUSED`, `USER_NOT_FOUND`, `ACCOUNT_DISABLED`.
+
+### POST `/api/v1/account/password/change`
+
+- Access: authenticated (Bearer JWT).
+- Description: authenticated change-password. Verifies the current password, applies the policy, and revokes all refresh sessions on success.
+- Request body: `ChangePasswordRequest { currentPassword, newPassword, confirmPassword }`.
+- Response: `ApiResponse<Void>`.
+- Errors: `CURRENT_PASSWORD_INVALID`, `PASSWORD_MISMATCH`, `PASSWORD_POLICY_VIOLATED`, `PASSWORD_REUSED`.
+
 ### TODO / Future work
 
-- Remove deprecated request-body refresh fallback after frontend migration.
-- Add password-change and password-reset flows with session revocation.
-- Consider adding dedicated CSRF protection for auth-cookie flows if the deployment model requires weaker `SameSite` settings.
+- Promote `app.security.refresh-token-body-fallback-enabled` to `false` in all environments and fully remove the body fallback in a later release.
+- Enable `app.security.csrf-double-submit-enabled=true` once the front end echoes `X-XSRF-TOKEN`.
+- Replace `LoggingEmailSender` with a real SMTP / SES provider before production rollout.
 
 ---
 

@@ -170,7 +170,30 @@ public enum ErrorCode {
 
     // ─── Notification ───────────────────────────────────────────────────────
     NOTIFICATION_NOT_FOUND(HttpStatus.NOT_FOUND, "NOTIFICATION_NOT_FOUND",
-            "Notification not found");
+            "Notification not found"),
+
+    // ─── OTP / Password Reset ───────────────────────────────────────────────
+    OTP_INVALID(HttpStatus.UNPROCESSABLE_ENTITY, "OTP_INVALID", "OTP is invalid"),
+    OTP_EXPIRED(HttpStatus.UNPROCESSABLE_ENTITY, "OTP_EXPIRED", "OTP has expired"),
+    OTP_USED(HttpStatus.CONFLICT, "OTP_USED", "OTP has already been used"),
+    OTP_TOO_MANY_ATTEMPTS(HttpStatus.TOO_MANY_REQUESTS, "OTP_TOO_MANY_ATTEMPTS",
+            "Too many OTP attempts"),
+    OTP_RATE_LIMITED(HttpStatus.TOO_MANY_REQUESTS, "OTP_RATE_LIMITED",
+            "Too many OTP requests, please wait"),
+    PASSWORD_MISMATCH(HttpStatus.UNPROCESSABLE_ENTITY, "PASSWORD_MISMATCH",
+            "Passwords do not match"),
+    CURRENT_PASSWORD_INVALID(HttpStatus.UNPROCESSABLE_ENTITY, "CURRENT_PASSWORD_INVALID",
+            "Current password is incorrect"),
+    RESET_TOKEN_INVALID(HttpStatus.UNPROCESSABLE_ENTITY, "RESET_TOKEN_INVALID",
+            "Reset token is invalid"),
+    RESET_TOKEN_EXPIRED(HttpStatus.UNPROCESSABLE_ENTITY, "RESET_TOKEN_EXPIRED",
+            "Reset token has expired"),
+    PASSWORD_POLICY_VIOLATED(HttpStatus.UNPROCESSABLE_ENTITY, "PASSWORD_POLICY_VIOLATED",
+            "Password does not meet the required policy"),
+    PASSWORD_REUSED(HttpStatus.UNPROCESSABLE_ENTITY, "PASSWORD_REUSED",
+            "New password must be different from the current password"),
+    CSRF_TOKEN_INVALID(HttpStatus.FORBIDDEN, "CSRF_TOKEN_INVALID",
+            "CSRF token is missing or invalid");
 
     // ────────────────────────────────────────────────────────────────────────
 

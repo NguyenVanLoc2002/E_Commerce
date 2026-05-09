@@ -381,6 +381,21 @@ The current `ErrorCode` enum defines these domain codes.
 
 - `NOTIFICATION_NOT_FOUND`
 
+### 7.14 Password reset / OTP
+
+- `OTP_INVALID` — submitted OTP does not match
+- `OTP_EXPIRED` — OTP past `expires_at`
+- `OTP_USED` — OTP has already been verified or superseded
+- `OTP_TOO_MANY_ATTEMPTS` — verify-attempts exceeded `max_attempts`
+- `OTP_RATE_LIMITED` — send cooldown active or per-window limit reached
+- `RESET_TOKEN_INVALID` — reset token unknown, malformed, or already used
+- `RESET_TOKEN_EXPIRED` — reset token past `expires_at`
+- `PASSWORD_MISMATCH` — `confirmPassword` does not equal `newPassword`
+- `PASSWORD_POLICY_VIOLATED` — password fails length / character-class policy
+- `PASSWORD_REUSED` — new password equals current password
+- `CURRENT_PASSWORD_INVALID` — supplied current password is wrong
+- `CSRF_TOKEN_INVALID` — CSRF double-submit cookie/header mismatch
+
 ---
 
 ## 8. Query parameter conventions

@@ -1,5 +1,6 @@
 package com.locnguyen.ecommerce.common.config;
 
+import com.locnguyen.ecommerce.common.security.CsrfDoubleSubmitFilter;
 import com.locnguyen.ecommerce.common.security.JwtAccessDeniedHandler;
 import com.locnguyen.ecommerce.common.security.JwtAuthenticationEntryPoint;
 import com.locnguyen.ecommerce.common.security.JwtAuthenticationFilter;
@@ -63,6 +64,7 @@ public class SecurityConfig {
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
     private final JwtAuthenticationEntryPoint jwtAuthenticationEntryPoint;
     private final JwtAccessDeniedHandler jwtAccessDeniedHandler;
+    private final CsrfDoubleSubmitFilter csrfDoubleSubmitFilter;
 
     // ─── Endpoint whitelists ─────────────────────────────────────────────────
 
@@ -72,6 +74,9 @@ public class SecurityConfig {
             "/api/v1/auth/login",
             "/api/v1/auth/refresh-token",
             "/api/v1/auth/logout",
+            "/api/v1/auth/password/forgot",
+            "/api/v1/auth/password/forgot/verify",
+            "/api/v1/auth/password/reset",
     };
 
     /** Public GET-only endpoints for product browsing. */
@@ -136,10 +141,21 @@ public class SecurityConfig {
                         .anyRequest().authenticated()
                 )
 
+                // ── CSRF double-submit (gated) ─────────────────────────────
+                // Issues / validates the XSRF-TOKEN cookie + X-XSRF-TOKEN header
+                // pair on cookie-mutating endpoints. Toggleable via
+                // app.security.csrf-double-submit-enabled. Registered before the
+                // JWT filter so unauthenticated cookie-only flows
+                // (refresh-token / logout) are still protected.
+                .addFilterBefore(csrfDoubleSubmitFilter,
+                        UsernamePasswordAuthenticationFilter.class)
+
                 // ── JWT filter ─────────────────────────────────────────────
                 // Placed before UsernamePasswordAuthenticationFilter to validate
                 // the Bearer token and populate SecurityContext before any
-                // form-based auth filter runs (which we don't use, but for ordering correctness)
+                // form-based auth filter runs (which we don't use, but for ordering correctness).
+                // Registered after CSRF — both anchor to UsernamePasswordAuthenticationFilter,
+                // and the JWT filter ends up last (closer to the anchor).
                 .addFilterBefore(jwtAuthenticationFilter,
                         UsernamePasswordAuthenticationFilter.class);
 

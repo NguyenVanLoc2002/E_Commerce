@@ -12,6 +12,7 @@ import com.locnguyen.ecommerce.domains.auth.dto.LoginRequest;
 import com.locnguyen.ecommerce.domains.auth.dto.TokenResponse;
 import com.locnguyen.ecommerce.domains.auth.dto.UserResponse;
 import com.locnguyen.ecommerce.domains.auth.service.AuthService;
+import com.locnguyen.ecommerce.domains.auth.service.PasswordResetService;
 import com.locnguyen.ecommerce.domains.user.enums.UserStatus;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -40,6 +41,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class AuthControllerTest {
 
     @Mock AuthService authService;
+    @Mock PasswordResetService passwordResetService;
 
     private MockMvc mockMvc;
     private ObjectMapper objectMapper;
@@ -56,7 +58,8 @@ class AuthControllerTest {
 
         AuthController controller = new AuthController(
                 authService,
-                new RefreshTokenCookieService(appProperties)
+                new RefreshTokenCookieService(appProperties),
+                passwordResetService
         );
 
         mockMvc = MockMvcBuilders.standaloneSetup(controller)
