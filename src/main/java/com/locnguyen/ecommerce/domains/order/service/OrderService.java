@@ -14,7 +14,7 @@ import java.util.UUID;
 
 public interface OrderService {
 
-    OrderResponse createOrder(Customer customer, CreateOrderRequest request);
+    OrderResponse createOrder(Customer customer, CreateOrderRequest request, String idempotencyKey);
 
     PagedResponse<OrderListItemResponse> getMyOrders(Customer customer, OrderFilter filter, Pageable pageable);
 

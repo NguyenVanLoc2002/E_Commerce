@@ -265,3 +265,44 @@ Behavior when `app.security.csrf-double-submit-enabled=true`:
 4. Mismatch / missing → 403 `CSRF_TOKEN_INVALID`.
 
 The flag is **disabled by default in dev** to avoid breaking existing clients during rollout. Enable in production once the front end has been updated to echo the header.
+
+---
+
+## 10. Payment callback security (HMAC — PENDING)
+
+`POST /api/v1/payments/callback` is a public endpoint called server-to-server by the payment gateway. It is **not** protected by a Bearer token.
+
+### 10.1 Current protection
+
+Without a gateway-specific HMAC implementation, the only guards are:
+
+- **State-machine guards**: duplicate SUCCESS callbacks are no-ops (payment already PAID); stale callbacks cannot move a PAID/REFUNDED payment backward.
+- **Duplicate `providerTxnId` check**: application-level deduplication before any mutation.
+- **DB unique constraint on `payment_transactions.provider_txn_id`**: DB-level duplicate protection complementing the application check.
+
+### 10.2 Missing protection (TODO before production)
+
+Each payment gateway (VNPay, MoMo, ZaloPay, etc.) signs its callbacks with an HMAC or RSA signature. Without verifying this signature, any party that knows the callback URL can submit a spoofed `status=SUCCESS` for any order code.
+
+**Required implementation before production:**
+
+```java
+// In PaymentServiceImpl.processCallback — the TODO is already present:
+// TODO(phase-2): HMAC/signature verification must be added here before any
+// business mutation. Each gateway uses a different signing algorithm and
+// secret key. Wire a PaymentGatewaySignatureVerifier when the gateway
+// integration is implemented. Failing signature verification must throw
+// AppException(ErrorCode.PAYMENT_CALLBACK_INVALID) before the order is touched.
+```
+
+### 10.3 Implementation guidance
+
+1. Create a `PaymentGatewaySignatureVerifier` interface with a `verify(provider, payload, signature)` method.
+2. Implement one class per gateway (e.g., `VnPaySignatureVerifier`, `MoMoSignatureVerifier`).
+3. Inject via a `Map<String, PaymentGatewaySignatureVerifier>` keyed by provider name.
+4. Call before any read of `order` or `payment` state.
+5. Failing verification must throw `AppException(ErrorCode.PAYMENT_CALLBACK_INVALID)` — never log raw payload or secrets.
+
+### 10.4 Risk level
+
+**HIGH** — Until HMAC is implemented, any attacker who discovers the callback URL can confirm payments without actually paying. Do not expose this endpoint to the public internet on a production environment without completing HMAC verification.

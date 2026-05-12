@@ -15,6 +15,7 @@ public class AppProperties {
     private Security security = new Security();
     private Otp otp = new Otp();
     private ResetToken resetToken = new ResetToken();
+    private Idempotency idempotency = new Idempotency();
 
     @Getter
     @Setter
@@ -82,5 +83,14 @@ public class AppProperties {
     @Setter
     public static class ResetToken {
         private int expiresMinutes = 10;
+    }
+
+    @Getter
+    @Setter
+    public static class Idempotency {
+        /** TTL for idempotency records. Requests older than this threshold are stale. */
+        private long ttlHours = 24L;
+        /** Processing records older than this (minutes) are treated as stale and allow retry. */
+        private long staleProcessingMinutes = 5L;
     }
 }

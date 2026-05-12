@@ -2,6 +2,7 @@ package com.locnguyen.ecommerce.domains.payment.controller;
 
 import com.locnguyen.ecommerce.common.constants.AppConstants;
 import com.locnguyen.ecommerce.common.response.ApiResponse;
+import com.locnguyen.ecommerce.domains.idempotency.service.IdempotencyService;
 import com.locnguyen.ecommerce.domains.payment.dto.InitPaymentRequest;
 import com.locnguyen.ecommerce.domains.payment.dto.PaymentCallbackRequest;
 import com.locnguyen.ecommerce.domains.payment.dto.PaymentResponse;
@@ -24,6 +25,7 @@ public class PaymentController {
 
     private final PaymentService paymentService;
     private final UserService userService;
+    private final IdempotencyService idempotencyService;
 
     // ─── Customer endpoints ─────────────────────────────────────────────────
 
@@ -37,8 +39,8 @@ public class PaymentController {
 
     @Operation(
             summary = "Initiate online payment for my order",
-            description = "Creates a payment record and returns payment details. " +
-                    "Idempotent: calling again for an in-flight payment returns the existing record. " +
+            description = "Requires Idempotency-Key header. Same key + same payload returns existing " +
+                    "payment record without re-initiating. " +
                     "Calling after a FAILED payment retries the payment."
     )
     @SecurityRequirement(name = "bearerAuth")
@@ -46,12 +48,15 @@ public class PaymentController {
     @PostMapping("/order/{orderId}/initiate")
     public ApiResponse<PaymentResponse> initiateOnlinePayment(
             @PathVariable UUID orderId,
+            @RequestHeader(value = "Idempotency-Key", required = false) String rawKey,
             @Valid @RequestBody(required = false) InitPaymentRequest request) {
         if (request == null) {
             request = new InitPaymentRequest();
         }
+        String key = idempotencyService.validateKey(rawKey);
         return ApiResponse.created(
-                paymentService.initiateOnlinePayment(orderId, userService.getCurrentCustomer(), request));
+                paymentService.initiateOnlinePayment(
+                        orderId, userService.getCurrentCustomer(), request, key));
     }
 
     // ─── Gateway callback (no auth — called by external payment provider) ───

@@ -67,4 +67,10 @@ public class Shipment extends BaseEntity {
                fetch = FetchType.LAZY)
     @OrderBy("eventTime ASC")
     private List<ShipmentEvent> events = new ArrayList<>();
+
+    // ─── Optimistic locking ─────────────────────────────────────────────────
+
+    @Version
+    @Column(name = "version", nullable = false)
+    private Long version = 0L;
 }

@@ -113,4 +113,10 @@ public class Order extends BaseEntity {
     @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = false)
     @ToString.Exclude
     private List<OrderItem> items = new ArrayList<>();
+
+    // ─── Optimistic locking ─────────────────────────────────────────────────
+
+    @Version
+    @Column(name = "version", nullable = false)
+    private Long version = 0L;
 }

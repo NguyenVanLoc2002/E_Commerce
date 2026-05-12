@@ -3,10 +3,12 @@ package com.locnguyen.ecommerce.common.exception;
 import com.locnguyen.ecommerce.common.response.ErrorResponse;
 import com.locnguyen.ecommerce.common.response.FieldError;
 import jakarta.persistence.EntityNotFoundException;
+import jakarta.persistence.OptimisticLockException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolationException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -275,6 +277,60 @@ public class GlobalExceptionHandler {
         return ResponseEntity
                 .status(HttpStatus.UNAUTHORIZED)
                 .body(ErrorResponse.of(ErrorCode.UNAUTHORIZED, request.getRequestURI()));
+    }
+
+    // ════════════════════════════════════════════════════════════════════════
+    // Concurrency exceptions
+    // ════════════════════════════════════════════════════════════════════════
+
+    /**
+     * 409 — Optimistic lock conflict (Spring Data JPA path).
+     *
+     * <p>Thrown by {@code save()} when the entity's {@code @Version} value read
+     * at load time no longer matches the current DB row — meaning another
+     * transaction committed a change between our read and our write.
+     *
+     * <p>The caller should reload the resource and retry if appropriate.
+     * Internal entity class names are intentionally not exposed in the response.
+     */
+    @ExceptionHandler(ObjectOptimisticLockingFailureException.class)
+    public ResponseEntity<ErrorResponse> handleObjectOptimisticLocking(
+            ObjectOptimisticLockingFailureException ex, HttpServletRequest request) {
+
+        log.warn("Optimistic lock conflict at path={}: {}",
+                request.getRequestURI(), ex.getMessage());
+
+        return ResponseEntity
+                .status(HttpStatus.CONFLICT)
+                .body(ErrorResponse.of(
+                        ErrorCode.CONCURRENT_MODIFICATION,
+                        ErrorCode.CONCURRENT_MODIFICATION.getDefaultMessage(),
+                        request.getRequestURI()
+                ));
+    }
+
+    /**
+     * 409 — Optimistic lock conflict (JPA direct path).
+     *
+     * <p>Covers cases where the JPA provider (Hibernate) throws the raw JPA
+     * exception instead of the Spring wrapper — e.g., when using
+     * {@code EntityManager} directly or from within a Spring managed
+     * transaction that re-throws the original JPA exception.
+     */
+    @ExceptionHandler(OptimisticLockException.class)
+    public ResponseEntity<ErrorResponse> handleJpaOptimisticLock(
+            OptimisticLockException ex, HttpServletRequest request) {
+
+        log.warn("JPA optimistic lock conflict at path={}: {}",
+                request.getRequestURI(), ex.getMessage());
+
+        return ResponseEntity
+                .status(HttpStatus.CONFLICT)
+                .body(ErrorResponse.of(
+                        ErrorCode.CONCURRENT_MODIFICATION,
+                        ErrorCode.CONCURRENT_MODIFICATION.getDefaultMessage(),
+                        request.getRequestURI()
+                ));
     }
 
     // ════════════════════════════════════════════════════════════════════════

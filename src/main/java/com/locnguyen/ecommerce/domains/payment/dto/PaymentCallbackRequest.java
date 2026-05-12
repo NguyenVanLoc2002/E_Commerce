@@ -24,4 +24,16 @@ public class PaymentCallbackRequest {
 
     @Schema(description = "Raw callback payload from gateway (JSON)")
     private String payload;
+
+    /**
+     * HMAC or digital signature supplied by the payment gateway.
+     *
+     * <p>This field is optional at the DTO level because different gateways
+     * deliver the signature via different channels (request body field, query
+     * parameter, or HTTP header). The actual verification logic must be
+     * implemented per-gateway in a dedicated verifier when gateway integration
+     * is added. See the TODO in {@code PaymentServiceImpl.processCallback}.
+     */
+    @Schema(description = "Gateway-supplied HMAC or signature for request authenticity verification")
+    private String signature;
 }

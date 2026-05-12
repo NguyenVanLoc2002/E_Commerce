@@ -4,6 +4,11 @@ import com.locnguyen.ecommerce.common.exception.AppException;
 import com.locnguyen.ecommerce.common.exception.ErrorCode;
 import com.locnguyen.ecommerce.common.response.PagedResponse;
 import com.locnguyen.ecommerce.common.utils.CodeGenerator;
+import com.locnguyen.ecommerce.common.utils.RequestHashUtils;
+import com.locnguyen.ecommerce.domains.idempotency.entity.IdempotencyKey;
+import com.locnguyen.ecommerce.domains.idempotency.enums.IdempotencyActionType;
+import com.locnguyen.ecommerce.domains.idempotency.enums.IdempotencyStatus;
+import com.locnguyen.ecommerce.domains.idempotency.service.IdempotencyService;
 import com.locnguyen.ecommerce.domains.customer.entity.Customer;
 import com.locnguyen.ecommerce.domains.order.entity.Order;
 import com.locnguyen.ecommerce.domains.order.enums.PaymentMethod;
@@ -39,6 +44,7 @@ public class PaymentServiceImpl implements PaymentService {
     private final PaymentTransactionRepository transactionRepository;
     private final OrderRepository orderRepository;
     private final PaymentMapper paymentMapper;
+    private final IdempotencyService idempotencyService;
 
     // ─── COD payment ────────────────────────────────────────────────────────
 
@@ -126,10 +132,43 @@ public class PaymentServiceImpl implements PaymentService {
      *   <li>FAILED → allow retry: reset to INITIATED, record new transaction</li>
      *   <li>PAID / REFUNDED → throw PAYMENT_ALREADY_PROCESSED</li>
      * </ul>
+     *
+     * <p>Idempotency: same Idempotency-Key + same payload returns the existing payment
+     * without creating a duplicate record or calling the external provider again.
      */
     @Transactional
     public PaymentResponse initiateOnlinePayment(UUID orderId, Customer customer,
-                                                 InitPaymentRequest request) {
+                                                 InitPaymentRequest request, String idempotencyKey) {
+        // ── Idempotency gate ───────────────────────────────────────────────────
+        String requestHash = RequestHashUtils.hashFields(
+                customer.getId(),
+                "orderId", orderId.toString(),
+                "provider", request.getProvider() != null ? request.getProvider() : ""
+        );
+        IdempotencyKey idem = idempotencyService.findOrCreateProcessing(
+                customer.getId(), IdempotencyActionType.PAYMENT_INITIATE, idempotencyKey, requestHash);
+
+        if (idem.getStatus() == IdempotencyStatus.COMPLETED) {
+            UUID existingPaymentId = UUID.fromString(idem.getResourceId());
+            Payment existing = paymentRepository.findById(existingPaymentId)
+                    .orElseThrow(() -> new AppException(ErrorCode.PAYMENT_NOT_FOUND));
+            return paymentMapper.toResponse(existing);
+        }
+
+        try {
+            return executeInitiateOnlinePayment(orderId, customer, request, idem);
+        } catch (AppException e) {
+            idempotencyService.markFailed(idem.getId(), e.getErrorCode().getCode());
+            throw e;
+        } catch (Exception e) {
+            idempotencyService.markFailed(idem.getId(), ErrorCode.INTERNAL_SERVER_ERROR.getCode());
+            throw e;
+        }
+    }
+
+    private PaymentResponse executeInitiateOnlinePayment(UUID orderId, Customer customer,
+                                                         InitPaymentRequest request,
+                                                         IdempotencyKey idem) {
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new AppException(ErrorCode.ORDER_NOT_FOUND));
 
@@ -143,6 +182,8 @@ public class PaymentServiceImpl implements PaymentService {
                     "Order payment method is not ONLINE");
         }
 
+        Payment resultPayment;
+
         // Handle existing payment record (idempotency + retry)
         if (paymentRepository.existsByOrderId(orderId)) {
             Payment existing = findByOrderIdOrThrow(orderId);
@@ -152,7 +193,7 @@ public class PaymentServiceImpl implements PaymentService {
                     // Already in-flight — return existing record (idempotent)
                     log.info("Online payment already in-flight, returning existing: code={}",
                             existing.getPaymentCode());
-                    return paymentMapper.toResponse(existing);
+                    resultPayment = existing;
                 }
                 case PAID, REFUNDED, PARTIALLY_REFUNDED ->
                         throw new AppException(ErrorCode.PAYMENT_ALREADY_PROCESSED,
@@ -169,33 +210,39 @@ public class PaymentServiceImpl implements PaymentService {
 
                     log.info("Online payment re-initiated after FAILED: code={}",
                             existing.getPaymentCode());
-                    return paymentMapper.toResponse(existing);
+                    resultPayment = existing;
                 }
+                default -> throw new AppException(ErrorCode.INTERNAL_SERVER_ERROR,
+                        "Unhandled payment status: " + existing.getStatus());
             }
+        } else {
+            // No existing record — create new
+            Payment payment = new Payment();
+            payment.setOrder(order);
+            payment.setPaymentCode(CodeGenerator.generatePaymentCode());
+            payment.setMethod(PaymentMethod.ONLINE);
+            payment.setStatus(PaymentRecordStatus.INITIATED);
+            payment.setAmount(order.getTotalAmount());
+            payment.setExpiredAt(LocalDateTime.now().plusHours(24));
+
+            payment = paymentRepository.save(payment);
+
+            // Reflect in the denormalized Order.paymentStatus
+            order.setPaymentStatus(PaymentStatus.PENDING);
+            orderRepository.save(order);
+
+            recordTransaction(payment, TransactionStatus.INITIATED, PaymentMethod.ONLINE,
+                    request.getProvider(), null,
+                    "Online payment initiated for order " + order.getOrderCode());
+
+            log.info("Online payment initiated: code={} orderCode={} provider={}",
+                    payment.getPaymentCode(), order.getOrderCode(), request.getProvider());
+            resultPayment = payment;
         }
 
-        // No existing record — create new
-        Payment payment = new Payment();
-        payment.setOrder(order);
-        payment.setPaymentCode(CodeGenerator.generatePaymentCode());
-        payment.setMethod(PaymentMethod.ONLINE);
-        payment.setStatus(PaymentRecordStatus.INITIATED);
-        payment.setAmount(order.getTotalAmount());
-        payment.setExpiredAt(LocalDateTime.now().plusHours(24));
-
-        payment = paymentRepository.save(payment);
-
-        // Reflect in the denormalized Order.paymentStatus
-        order.setPaymentStatus(PaymentStatus.PENDING);
-        orderRepository.save(order);
-
-        recordTransaction(payment, TransactionStatus.INITIATED, PaymentMethod.ONLINE,
-                request.getProvider(), null,
-                "Online payment initiated for order " + order.getOrderCode());
-
-        log.info("Online payment initiated: code={} orderCode={} provider={}",
-                payment.getPaymentCode(), order.getOrderCode(), request.getProvider());
-        return paymentMapper.toResponse(payment);
+        idempotencyService.markComplete(
+                idem.getId(), "PAYMENT", resultPayment.getId().toString(), 201);
+        return paymentMapper.toResponse(resultPayment);
     }
 
     /**
@@ -213,11 +260,22 @@ public class PaymentServiceImpl implements PaymentService {
      */
     @Transactional
     public PaymentResponse processCallback(PaymentCallbackRequest request) {
+        // TODO(phase-2): HMAC/signature verification must be added here before any
+        // business mutation. Each gateway (VNPay, MoMo, etc.) uses a different signing
+        // algorithm and secret key. Wire a PaymentGatewaySignatureVerifier when the
+        // gateway integration is implemented. Failing signature verification must throw
+        // AppException(ErrorCode.PAYMENT_CALLBACK_INVALID) before the order is touched.
+        // See docs/security.md §5 and CLAUDE.md §9 for context.
+
         Order order = orderRepository.findByOrderCode(request.getOrderCode())
                 .orElseThrow(() -> new AppException(ErrorCode.PAYMENT_CALLBACK_INVALID,
                         "Order not found: " + request.getOrderCode()));
 
-        Payment payment = paymentRepository.findByOrderId(order.getId())
+        // Acquire a row-level lock on the Payment before any idempotency checks.
+        // Without this lock, two simultaneous SUCCESS callbacks can both pass the
+        // "not PAID" and "duplicate providerTxnId" checks and both write PAID,
+        // producing duplicate PaymentTransaction rows and double state mutations.
+        Payment payment = paymentRepository.findByOrderIdWithLock(order.getId())
                 .orElseThrow(() -> new AppException(ErrorCode.PAYMENT_NOT_FOUND));
 
         // Idempotent: already paid

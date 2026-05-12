@@ -3,6 +3,7 @@ package com.locnguyen.ecommerce.domains.order.controller;
 import com.locnguyen.ecommerce.common.constants.AppConstants;
 import com.locnguyen.ecommerce.common.response.ApiResponse;
 import com.locnguyen.ecommerce.common.response.PagedResponse;
+import com.locnguyen.ecommerce.domains.idempotency.service.IdempotencyService;
 import com.locnguyen.ecommerce.domains.order.dto.CreateOrderRequest;
 import com.locnguyen.ecommerce.domains.order.dto.OrderFilter;
 import com.locnguyen.ecommerce.domains.order.dto.OrderListItemResponse;
@@ -34,12 +35,18 @@ public class OrderController {
 
     private final OrderService orderService;
     private final UserService userService;
+    private final IdempotencyService idempotencyService;
 
-    @Operation(summary = "Create order from cart")
+    @Operation(summary = "Create order from cart",
+               description = "Requires Idempotency-Key header. Same key + same payload returns existing order.")
     @ResponseStatus(HttpStatus.CREATED)
     @PostMapping
-    public ApiResponse<OrderResponse> createOrder(@Valid @RequestBody CreateOrderRequest request) {
-        return ApiResponse.created(orderService.createOrder(userService.getCurrentCustomer(), request));
+    public ApiResponse<OrderResponse> createOrder(
+            @RequestHeader(value = "Idempotency-Key", required = false) String rawKey,
+            @Valid @RequestBody CreateOrderRequest request) {
+        String key = idempotencyService.validateKey(rawKey);
+        return ApiResponse.created(
+                orderService.createOrder(userService.getCurrentCustomer(), request, key));
     }
 
     @Operation(summary = "List my orders (paginated, filterable by status)")

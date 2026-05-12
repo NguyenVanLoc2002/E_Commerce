@@ -4,7 +4,12 @@ import com.locnguyen.ecommerce.common.exception.AppException;
 import com.locnguyen.ecommerce.common.exception.ErrorCode;
 import com.locnguyen.ecommerce.common.response.PagedResponse;
 import com.locnguyen.ecommerce.common.utils.CodeGenerator;
+import com.locnguyen.ecommerce.common.utils.RequestHashUtils;
 import com.locnguyen.ecommerce.common.utils.SecurityUtils;
+import com.locnguyen.ecommerce.domains.idempotency.entity.IdempotencyKey;
+import com.locnguyen.ecommerce.domains.idempotency.enums.IdempotencyActionType;
+import com.locnguyen.ecommerce.domains.idempotency.enums.IdempotencyStatus;
+import com.locnguyen.ecommerce.domains.idempotency.service.IdempotencyService;
 import com.locnguyen.ecommerce.domains.address.entity.Address;
 import com.locnguyen.ecommerce.domains.address.repository.AddressRepository;
 import com.locnguyen.ecommerce.domains.cart.entity.Cart;
@@ -65,6 +70,7 @@ public class OrderServiceImpl implements OrderService {
     private final PaymentService paymentService;
     private final NotificationService notificationService;
     private final AuditLogService auditLogService;
+    private final IdempotencyService idempotencyService;
 
     // ─── Create order from cart ─────────────────────────────────────────────
 
@@ -86,9 +92,41 @@ public class OrderServiceImpl implements OrderService {
      * the entire operation rolls back.
      */
     @Transactional
-    public OrderResponse createOrder(Customer customer, CreateOrderRequest request) {
-        // 1. Load active cart
-        Cart cart = cartRepository.findByCustomerIdAndStatus(customer.getId(), CartStatus.ACTIVE)
+    public OrderResponse createOrder(Customer customer, CreateOrderRequest request, String idempotencyKey) {
+        // ── Idempotency gate ───────────────────────────────────────────────────
+        // findOrCreateProcessing runs in REQUIRES_NEW — the PROCESSING record is
+        // committed immediately, making it visible to concurrent requests before
+        // the cart lock below is acquired.
+        String requestHash = RequestHashUtils.hash(request, customer.getId());
+        IdempotencyKey idem = idempotencyService.findOrCreateProcessing(
+                customer.getId(), IdempotencyActionType.CHECKOUT, idempotencyKey, requestHash);
+
+        if (idem.getStatus() == IdempotencyStatus.COMPLETED) {
+            // Safe replay: return the order that was already created
+            UUID existingOrderId = UUID.fromString(idem.getResourceId());
+            return buildOrderResponse(orderRepository.findById(existingOrderId)
+                    .orElseThrow(() -> new AppException(ErrorCode.ORDER_NOT_FOUND)));
+        }
+
+        // ── Checkout execution ────────────────────────────────────────────────
+        try {
+            return executeCheckout(customer, request, idem);
+        } catch (AppException e) {
+            idempotencyService.markFailed(idem.getId(), e.getErrorCode().getCode());
+            throw e;
+        } catch (Exception e) {
+            idempotencyService.markFailed(idem.getId(), ErrorCode.INTERNAL_SERVER_ERROR.getCode());
+            throw e;
+        }
+    }
+
+    private OrderResponse executeCheckout(Customer customer, CreateOrderRequest request,
+                                          IdempotencyKey idem) {
+        // 1. Load active cart with a row-level lock to prevent double-checkout.
+        // Two concurrent createOrder calls for the same customer will serialize here:
+        // the second waits until the first commits, then fails CART_NOT_FOUND because
+        // the cart is already CHECKED_OUT.
+        Cart cart = cartRepository.findByCustomerIdAndStatusWithLock(customer.getId(), CartStatus.ACTIVE)
                 .orElseThrow(() -> new AppException(ErrorCode.CART_NOT_FOUND));
 
         List<CartItem> cartItems = cartItemRepository.findByCartIdOrderByCreatedAtAsc(cart.getId());
@@ -225,6 +263,9 @@ public class OrderServiceImpl implements OrderService {
                 paymentMethod, SecurityUtils.getCurrentUsernameOrSystem());
         auditLogService.log(AuditAction.ORDER_CREATED, "ORDER", orderCode,
                 "items=" + cartItems.size() + " total=" + order.getTotalAmount());
+
+        // Mark idempotency as completed — stored in the same transaction as the order
+        idempotencyService.markComplete(idem.getId(), "ORDER", order.getId().toString(), 201);
 
         return buildOrderResponse(order);
     }

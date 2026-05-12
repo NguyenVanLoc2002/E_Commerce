@@ -19,7 +19,8 @@ public interface PaymentService {
 
     PaymentResponse completeCodPayment(UUID orderId);
 
-    PaymentResponse initiateOnlinePayment(UUID orderId, Customer customer, InitPaymentRequest request);
+    PaymentResponse initiateOnlinePayment(UUID orderId, Customer customer,
+                                          InitPaymentRequest request, String idempotencyKey);
 
     PaymentResponse processCallback(PaymentCallbackRequest request);
 

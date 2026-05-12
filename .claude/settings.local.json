@@ -57,7 +57,11 @@
       "PowerShell(.\\\\mvnw.cmd -DskipTests \"-Dflyway.url=jdbc:mariadb://localhost:3306/ecommerce_dev\" \"-Dflyway.user=root\" \"-Dflyway.password=0986045812a\" flyway:repair 2>&1 | Select-Object -Last 15)",
       "PowerShell(.\\\\mvnw.cmd -DskipTests \"-Dflyway.url=jdbc:mariadb://localhost:3306/ecommerce_dev\" \"-Dflyway.user=root\" \"-Dflyway.password=0986045812a\" flyway:migrate 2>&1 | Select-Object -Last 25)",
       "PowerShell(.\\\\mvnw.cmd verify 2>&1 | Select-Object -Last 30)",
-      "PowerShell(.\\\\mvnw.cmd verify 2>&1 | Select-Object -Last 20)"
+      "PowerShell(.\\\\mvnw.cmd verify 2>&1 | Select-Object -Last 20)",
+      "Bash(./mvnw verify *)",
+      "Bash(Select-String -Pattern \"Tests run:|BUILD|FAILED\")",
+      "Bash(Select-Object -Last 20)",
+      "PowerShell(cd \"T:\\\\Project\\\\ecommerce-backend\"; ./mvnw test 2>&1 | Select-String -Pattern \"Tests run:|BUILD|FAILED|ERROR\" | Where-Object { $_ -notmatch \"logback|INFO|WARN\" } | Select-Object -Last 30)"
     ]
   }
 }

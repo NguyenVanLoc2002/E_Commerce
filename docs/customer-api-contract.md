@@ -33,7 +33,7 @@ Shared response, error, auth, enum, and pagination rules are defined in [api-com
 
 ### Important current-code note
 
-`POST /api/v1/payments/callback` is **not** public in the current source because `SecurityConfig` does not whitelist it. It currently requires authentication even though the controller comment describes it as a gateway callback.
+`POST /api/v1/payments/callback` is a **public** endpoint called server-to-server by the payment gateway. No `Authorization` header is needed. HMAC signature verification is a pending TODO — see `docs/security.md §10`.
 
 ### Legacy review moderation routes intentionally excluded
 
@@ -499,6 +499,7 @@ These non-admin paths exist in code but are admin/staff endpoints, not customer 
 
 - Access: authenticated customer flow
 - Description: create order from active cart
+- Required header: `Idempotency-Key: <unique-string>` (max 100 chars). Missing or blank key returns `400 IDEMPOTENCY_KEY_REQUIRED`. Same key + same payload returns the original order without re-executing checkout.
 - Request body:
   - `CreateOrderRequest`
 - Current HTTP status:
@@ -578,6 +579,7 @@ These non-admin paths exist in code but are admin/staff endpoints, not customer 
 
 - Access: authenticated customer flow
 - Description: initiate or retry online payment
+- Required header: `Idempotency-Key: <unique-string>` (max 100 chars). Missing or blank key returns `400 IDEMPOTENCY_KEY_REQUIRED`. Same key + same payload returns existing payment without re-initiating. After a FAILED payment, the same key retries the payment.
 - Request body:
   - optional `InitPaymentRequest`
   - if the body is omitted, the controller creates an empty request object internally
@@ -594,16 +596,18 @@ These non-admin paths exist in code but are admin/staff endpoints, not customer 
 
 ### POST `/api/v1/payments/callback`
 
-- Access: authenticated in the current source
-- Description: payment callback endpoint
+- Access: **public** — called server-to-server by the payment gateway. No auth token required.
+- Description: payment gateway callback endpoint. Idempotent on duplicate `providerTxnId`.
 - Request body:
   - `PaymentCallbackRequest`
 - Response:
   - `ApiResponse<PaymentResponse>`
 - Current service behavior:
-  - `status=SUCCESS` marks payment paid
-  - any other status value is treated as failed
-  - duplicate `providerTxnId` is idempotent
+  - `status=SUCCESS` marks payment PAID, order.paymentStatus → PAID
+  - any other status is treated as FAILED
+  - duplicate `providerTxnId` → returns existing result, no side effect
+  - stale callback cannot move a PAID/REFUNDED payment backward
+- Security limitation: HMAC signature verification is not yet implemented. See `docs/security.md §10`.
 
 ---
 

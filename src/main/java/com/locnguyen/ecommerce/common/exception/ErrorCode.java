@@ -18,6 +18,8 @@ public enum ErrorCode {
     NOT_FOUND(HttpStatus.NOT_FOUND, "NOT_FOUND", "Resource not found"),
     VALIDATION_ERROR(HttpStatus.UNPROCESSABLE_ENTITY, "VALIDATION_ERROR", "Validation failed"),
     CONFLICT(HttpStatus.CONFLICT, "CONFLICT", "Resource conflict"),
+    CONCURRENT_MODIFICATION(HttpStatus.CONFLICT, "CONCURRENT_MODIFICATION",
+            "Resource was modified concurrently. Please reload and retry."),
     INTERNAL_SERVER_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_SERVER_ERROR",
             "An internal error occurred. Please try again later."),
 
@@ -193,7 +195,19 @@ public enum ErrorCode {
     PASSWORD_REUSED(HttpStatus.UNPROCESSABLE_ENTITY, "PASSWORD_REUSED",
             "New password must be different from the current password"),
     CSRF_TOKEN_INVALID(HttpStatus.FORBIDDEN, "CSRF_TOKEN_INVALID",
-            "CSRF token is missing or invalid");
+            "CSRF token is missing or invalid"),
+
+    // ─── Idempotency ────────────────────────────────────────────────────────
+    IDEMPOTENCY_KEY_REQUIRED(HttpStatus.BAD_REQUEST, "IDEMPOTENCY_KEY_REQUIRED",
+            "Idempotency-Key header is required for this operation"),
+    IDEMPOTENCY_KEY_TOO_LONG(HttpStatus.BAD_REQUEST, "IDEMPOTENCY_KEY_TOO_LONG",
+            "Idempotency-Key must not exceed 100 characters"),
+    IDEMPOTENCY_KEY_CONFLICT(HttpStatus.CONFLICT, "IDEMPOTENCY_KEY_CONFLICT",
+            "Idempotency-Key was used with a different request payload"),
+    IDEMPOTENCY_REQUEST_IN_PROGRESS(HttpStatus.CONFLICT, "IDEMPOTENCY_REQUEST_IN_PROGRESS",
+            "A request with this Idempotency-Key is already in progress"),
+    IDEMPOTENCY_REPLAY_NOT_AVAILABLE(HttpStatus.CONFLICT, "IDEMPOTENCY_REPLAY_NOT_AVAILABLE",
+            "Idempotency replay is not available for this operation");
 
     // ────────────────────────────────────────────────────────────────────────
 

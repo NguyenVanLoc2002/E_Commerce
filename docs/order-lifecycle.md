@@ -165,7 +165,28 @@ Ghi log tất cả các hành động quan trọng:
 
 ---
 
-## 14. Anti-pattern cần tránh
+## 14. Idempotency (Phase 3)
+
+### Checkout (`POST /api/v1/orders`)
+
+- Requires `Idempotency-Key` header.
+- The PROCESSING record is committed in a `REQUIRES_NEW` transaction **before** the cart lock is acquired, so concurrent requests with the same key see the in-progress status and receive `409 IDEMPOTENCY_REQUEST_IN_PROGRESS` instead of racing through checkout.
+- On COMPLETED replay: the existing order is returned without re-running checkout or touching inventory.
+- On FAILED: checkout is retried automatically when the same key is resent (CHECKOUT is a retryable action).
+
+### Order state-change actions (confirm, cancel, complete, return)
+
+These actions are idempotent via the **state machine** — sending the same state-change twice results in `ORDER_STATUS_INVALID` on the second call (the first already moved the order forward). No client-side `Idempotency-Key` is required for admin actions.
+
+### Payment callback
+
+- Protected via `providerTxnId` uniqueness (DB constraint + application check), not `Idempotency-Key`.
+- Duplicate SUCCESS callback: no-op, returns existing PAID payment.
+- Stale FAILED callback after payment is PAID: rejected.
+
+---
+
+## 15. Anti-pattern cần tránh
 
 ❌ Update trực tiếp `status` trong repository hoặc DB  
 ❌ Bỏ qua validation state machine  
