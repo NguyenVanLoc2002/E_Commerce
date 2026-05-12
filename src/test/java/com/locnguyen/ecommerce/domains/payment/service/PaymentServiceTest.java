@@ -17,6 +17,11 @@ import com.locnguyen.ecommerce.domains.payment.enums.TransactionStatus;
 import com.locnguyen.ecommerce.domains.payment.mapper.PaymentMapper;
 import com.locnguyen.ecommerce.domains.payment.repository.PaymentRepository;
 import com.locnguyen.ecommerce.domains.payment.repository.PaymentTransactionRepository;
+import com.locnguyen.ecommerce.domains.payment.service.impl.PaymentServiceImpl;
+import com.locnguyen.ecommerce.domains.idempotency.entity.IdempotencyKey;
+import com.locnguyen.ecommerce.domains.idempotency.enums.IdempotencyStatus;
+import com.locnguyen.ecommerce.domains.idempotency.service.IdempotencyService;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -56,8 +61,20 @@ class PaymentServiceTest {
     @Mock PaymentTransactionRepository transactionRepository;
     @Mock OrderRepository orderRepository;
     @Mock PaymentMapper paymentMapper;
+    @Mock IdempotencyService idempotencyService;
 
-    @InjectMocks PaymentService paymentService;
+    @InjectMocks PaymentServiceImpl paymentService;
+
+    @BeforeEach
+    void stubIdempotency() {
+        // Default stub: return a PROCESSING record so all InitiateOnlinePayment tests
+        // bypass the idempotency gate and reach the business logic.
+        IdempotencyKey processingIdem = new IdempotencyKey();
+        ReflectionTestUtils.setField(processingIdem, "id", 1L);
+        processingIdem.setStatus(IdempotencyStatus.PROCESSING);
+        when(idempotencyService.findOrCreateProcessing(any(), any(), any(), any()))
+                .thenReturn(processingIdem);
+    }
 
     // ─── factories ───────────────────────────────────────────────────────────
 
@@ -265,7 +282,7 @@ class PaymentServiceTest {
             when(orderRepository.findById(uuid(99))).thenReturn(Optional.empty());
 
             assertThatThrownBy(() ->
-                    paymentService.initiateOnlinePayment(uuid(99), cust, initRequest()))
+                    paymentService.initiateOnlinePayment(uuid(99), cust, initRequest(), "idem-key"))
                     .isInstanceOf(AppException.class)
                     .extracting(e -> ((AppException) e).getErrorCode())
                     .isEqualTo(ErrorCode.ORDER_NOT_FOUND);
@@ -279,7 +296,7 @@ class PaymentServiceTest {
             when(orderRepository.findById(uuid(1))).thenReturn(Optional.of(o));
 
             assertThatThrownBy(() ->
-                    paymentService.initiateOnlinePayment(uuid(1), cust, initRequest()))
+                    paymentService.initiateOnlinePayment(uuid(1), cust, initRequest(), "idem-key"))
                     .isInstanceOf(AppException.class)
                     .extracting(e -> ((AppException) e).getErrorCode())
                     .isEqualTo(ErrorCode.ORDER_NOT_FOUND);
@@ -292,7 +309,7 @@ class PaymentServiceTest {
             when(orderRepository.findById(uuid(1))).thenReturn(Optional.of(o));
 
             assertThatThrownBy(() ->
-                    paymentService.initiateOnlinePayment(uuid(1), cust, initRequest()))
+                    paymentService.initiateOnlinePayment(uuid(1), cust, initRequest(), "idem-key"))
                     .isInstanceOf(AppException.class)
                     .extracting(e -> ((AppException) e).getErrorCode())
                     .isEqualTo(ErrorCode.BAD_REQUEST);
@@ -313,7 +330,7 @@ class PaymentServiceTest {
             when(transactionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
             when(paymentMapper.toResponse(any())).thenReturn(mock(PaymentResponse.class));
 
-            paymentService.initiateOnlinePayment(uuid(1), cust, initRequest());
+            paymentService.initiateOnlinePayment(uuid(1), cust, initRequest(), "idem-key");
 
             ArgumentCaptor<Payment> captor = ArgumentCaptor.forClass(Payment.class);
             verify(paymentRepository).save(captor.capture());
@@ -330,7 +347,7 @@ class PaymentServiceTest {
             when(paymentRepository.findByOrderId(uuid(1))).thenReturn(Optional.of(existing));
             when(paymentMapper.toResponse(any())).thenReturn(mock(PaymentResponse.class));
 
-            paymentService.initiateOnlinePayment(uuid(1), cust, initRequest());
+            paymentService.initiateOnlinePayment(uuid(1), cust, initRequest(), "idem-key");
 
             verify(paymentRepository, never()).save(any());
         }
@@ -347,7 +364,7 @@ class PaymentServiceTest {
             when(transactionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
             when(paymentMapper.toResponse(any())).thenReturn(mock(PaymentResponse.class));
 
-            paymentService.initiateOnlinePayment(uuid(1), cust, initRequest());
+            paymentService.initiateOnlinePayment(uuid(1), cust, initRequest(), "idem-key");
 
             verify(paymentRepository).save(argThat(
                     p -> p.getStatus() == PaymentRecordStatus.INITIATED));
@@ -363,7 +380,7 @@ class PaymentServiceTest {
             when(paymentRepository.findByOrderId(uuid(1))).thenReturn(Optional.of(paid));
 
             assertThatThrownBy(() ->
-                    paymentService.initiateOnlinePayment(uuid(1), cust, initRequest()))
+                    paymentService.initiateOnlinePayment(uuid(1), cust, initRequest(), "idem-key"))
                     .isInstanceOf(AppException.class)
                     .extracting(e -> ((AppException) e).getErrorCode())
                     .isEqualTo(ErrorCode.PAYMENT_ALREADY_PROCESSED);
@@ -379,7 +396,7 @@ class PaymentServiceTest {
             when(paymentRepository.findByOrderId(uuid(1))).thenReturn(Optional.of(refunded));
 
             assertThatThrownBy(() ->
-                    paymentService.initiateOnlinePayment(uuid(1), cust, initRequest()))
+                    paymentService.initiateOnlinePayment(uuid(1), cust, initRequest(), "idem-key"))
                     .isInstanceOf(AppException.class)
                     .extracting(e -> ((AppException) e).getErrorCode())
                     .isEqualTo(ErrorCode.PAYMENT_ALREADY_PROCESSED);
@@ -407,7 +424,7 @@ class PaymentServiceTest {
             Customer cust = customer(uuid(1));
             Order o = order(uuid(1), cust, PaymentMethod.ONLINE, new BigDecimal("200000"));
             when(orderRepository.findByOrderCode("ORD202604060001")).thenReturn(Optional.of(o));
-            when(paymentRepository.findByOrderId(uuid(1))).thenReturn(Optional.empty());
+            when(paymentRepository.findByOrderIdWithLock(uuid(1))).thenReturn(Optional.empty());
 
             assertThatThrownBy(() ->
                     paymentService.processCallback(callback("ORD202604060001", "SUCCESS", "TXN001")))
@@ -422,7 +439,7 @@ class PaymentServiceTest {
             Order o = order(uuid(1), cust, PaymentMethod.ONLINE, new BigDecimal("200000"));
             Payment p = payment(uuid(10), o, PaymentRecordStatus.PAID);
             when(orderRepository.findByOrderCode("ORD202604060001")).thenReturn(Optional.of(o));
-            when(paymentRepository.findByOrderId(uuid(1))).thenReturn(Optional.of(p));
+            when(paymentRepository.findByOrderIdWithLock(uuid(1))).thenReturn(Optional.of(p));
             when(paymentMapper.toResponse(any())).thenReturn(mock(PaymentResponse.class));
 
             paymentService.processCallback(callback("ORD202604060001", "SUCCESS", "TXN001"));
@@ -437,7 +454,7 @@ class PaymentServiceTest {
             Order o = order(uuid(1), cust, PaymentMethod.ONLINE, new BigDecimal("200000"));
             Payment p = payment(uuid(10), o, PaymentRecordStatus.INITIATED);
             when(orderRepository.findByOrderCode("ORD202604060001")).thenReturn(Optional.of(o));
-            when(paymentRepository.findByOrderId(uuid(1))).thenReturn(Optional.of(p));
+            when(paymentRepository.findByOrderIdWithLock(uuid(1))).thenReturn(Optional.of(p));
             when(transactionRepository.findByProviderTxnId("TXN-DUPLICATE"))
                     .thenReturn(Optional.of(mock(PaymentTransaction.class)));
             when(paymentMapper.toResponse(any())).thenReturn(mock(PaymentResponse.class));
@@ -453,7 +470,7 @@ class PaymentServiceTest {
             Order o = order(uuid(1), cust, PaymentMethod.ONLINE, new BigDecimal("200000"));
             Payment p = payment(uuid(10), o, PaymentRecordStatus.REFUNDED);
             when(orderRepository.findByOrderCode("ORD202604060001")).thenReturn(Optional.of(o));
-            when(paymentRepository.findByOrderId(uuid(1))).thenReturn(Optional.of(p));
+            when(paymentRepository.findByOrderIdWithLock(uuid(1))).thenReturn(Optional.of(p));
 
             assertThatThrownBy(() ->
                     paymentService.processCallback(callback("ORD202604060001", "SUCCESS", "TXN001")))
@@ -468,7 +485,7 @@ class PaymentServiceTest {
             Order o = order(uuid(1), cust, PaymentMethod.ONLINE, new BigDecimal("200000"));
             Payment p = payment(uuid(10), o, PaymentRecordStatus.INITIATED);
             when(orderRepository.findByOrderCode("ORD202604060001")).thenReturn(Optional.of(o));
-            when(paymentRepository.findByOrderId(uuid(1))).thenReturn(Optional.of(p));
+            when(paymentRepository.findByOrderIdWithLock(uuid(1))).thenReturn(Optional.of(p));
             when(transactionRepository.findByProviderTxnId("TXN001")).thenReturn(Optional.empty());
             when(paymentRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
             when(orderRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
@@ -490,7 +507,7 @@ class PaymentServiceTest {
             Order o = order(uuid(1), cust, PaymentMethod.ONLINE, new BigDecimal("200000"));
             Payment p = payment(uuid(10), o, PaymentRecordStatus.INITIATED);
             when(orderRepository.findByOrderCode("ORD202604060001")).thenReturn(Optional.of(o));
-            when(paymentRepository.findByOrderId(uuid(1))).thenReturn(Optional.of(p));
+            when(paymentRepository.findByOrderIdWithLock(uuid(1))).thenReturn(Optional.of(p));
             when(transactionRepository.findByProviderTxnId("TXN001")).thenReturn(Optional.empty());
             when(paymentRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
             when(orderRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
@@ -511,7 +528,7 @@ class PaymentServiceTest {
             Order o = order(uuid(1), cust, PaymentMethod.ONLINE, new BigDecimal("200000"));
             Payment p = payment(uuid(10), o, PaymentRecordStatus.INITIATED);
             when(orderRepository.findByOrderCode("ORD202604060001")).thenReturn(Optional.of(o));
-            when(paymentRepository.findByOrderId(uuid(1))).thenReturn(Optional.of(p));
+            when(paymentRepository.findByOrderIdWithLock(uuid(1))).thenReturn(Optional.of(p));
             when(transactionRepository.findByProviderTxnId("TXN001")).thenReturn(Optional.empty());
             when(paymentRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
             when(orderRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
@@ -532,7 +549,7 @@ class PaymentServiceTest {
             Order o = order(uuid(1), cust, PaymentMethod.ONLINE, new BigDecimal("200000"));
             Payment p = payment(uuid(10), o, PaymentRecordStatus.INITIATED);
             when(orderRepository.findByOrderCode("ORD202604060001")).thenReturn(Optional.of(o));
-            when(paymentRepository.findByOrderId(uuid(1))).thenReturn(Optional.of(p));
+            when(paymentRepository.findByOrderIdWithLock(uuid(1))).thenReturn(Optional.of(p));
             when(transactionRepository.findByProviderTxnId("TXN002")).thenReturn(Optional.empty());
             when(paymentRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
             when(orderRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
@@ -551,7 +568,7 @@ class PaymentServiceTest {
             Order o = order(uuid(1), cust, PaymentMethod.ONLINE, new BigDecimal("200000"));
             Payment p = payment(uuid(10), o, PaymentRecordStatus.INITIATED);
             when(orderRepository.findByOrderCode("ORD202604060001")).thenReturn(Optional.of(o));
-            when(paymentRepository.findByOrderId(uuid(1))).thenReturn(Optional.of(p));
+            when(paymentRepository.findByOrderIdWithLock(uuid(1))).thenReturn(Optional.of(p));
             // providerTxnId is null — no transactionRepository.findByProviderTxnId call
             when(paymentRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
             when(orderRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));

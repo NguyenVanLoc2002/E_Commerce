@@ -109,6 +109,26 @@ Nếu sản phẩm có nhiều biến thể, product không nên là nơi lưu:
 
 Những phần đó thuộc về `ProductVariant`.
 
+### 3.4. Read model cho keyword search
+
+Để tránh full-table scan từ `LIKE '%keyword%'`, product có thêm một cột
+denormalized `search_text` (lowercase, đã strip dấu tiếng Việt, đã map
+`đ`→`d`). Cột này được index bằng MariaDB FULLTEXT cùng với `name` và
+`slug`:
+
+- Service layer chịu trách nhiệm build `search_text` từ name/slug/brand/
+  category names khi create/update product (extension point cho SKU,
+  attributes, color, size, material trong tương lai).
+- Khi keyword có giá trị, list API chạy `MATCH(name, slug, search_text)
+  AGAINST (? IN BOOLEAN MODE)`; kết quả sort theo relevance trước, rồi mới
+  đến `Pageable.sort`.
+- Khi keyword rỗng, list API vẫn dùng JPA Specification path như cũ.
+- `search_text` là internal — không bao giờ trả về public API.
+- Sau khi triển khai migration mới hoặc bulk-fix dữ liệu, cần chạy
+  `POST /api/v1/admin/products/search/reindex` để rebuild dữ liệu cũ.
+- MariaDB là search engine duy nhất ở giai đoạn này; chưa giới thiệu
+  Elasticsearch.
+
 ---
 
 ## 4. Biến thể (Product Variant)

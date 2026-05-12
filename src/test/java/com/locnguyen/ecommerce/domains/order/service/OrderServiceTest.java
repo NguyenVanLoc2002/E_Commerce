@@ -25,6 +25,10 @@ import com.locnguyen.ecommerce.domains.order.enums.PaymentStatus;
 import com.locnguyen.ecommerce.domains.order.mapper.OrderMapper;
 import com.locnguyen.ecommerce.domains.order.repository.OrderItemRepository;
 import com.locnguyen.ecommerce.domains.order.repository.OrderRepository;
+import com.locnguyen.ecommerce.domains.order.service.impl.OrderServiceImpl;
+import com.locnguyen.ecommerce.domains.idempotency.entity.IdempotencyKey;
+import com.locnguyen.ecommerce.domains.idempotency.enums.IdempotencyStatus;
+import com.locnguyen.ecommerce.domains.idempotency.service.IdempotencyService;
 import com.locnguyen.ecommerce.domains.notification.service.NotificationService;
 import com.locnguyen.ecommerce.domains.payment.service.PaymentService;
 import com.locnguyen.ecommerce.domains.product.entity.Product;
@@ -78,8 +82,9 @@ class OrderServiceTest {
     @Mock PaymentService paymentService;
     @Mock AuditLogService auditLogService;
     @Mock NotificationService notificationService;
+    @Mock IdempotencyService idempotencyService;
 
-    @InjectMocks OrderService orderService;
+    @InjectMocks OrderServiceImpl orderService;
 
     // ─── factories ───────────────────────────────────────────────────────────
 
@@ -179,14 +184,21 @@ class OrderServiceTest {
     // ─── setupCommonStubsForCreateOrder ─────────────────────────────────────
 
     @BeforeEach
-    void stubOrderRepositorySave() {
-        // orderRepository.save() returns whatever order is passed in (adds an id)
+    void stubCommon() {
         when(orderRepository.save(any(Order.class))).thenAnswer(inv -> {
             Order o = inv.getArgument(0);
             if (o.getId() == null) setId(o, uuid(99));
             return o;
         });
         when(cartRepository.save(any(Cart.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        // Default idempotency stub: always return a fresh PROCESSING record so all
+        // CreateOrder tests reach the business logic uninterrupted.
+        IdempotencyKey processingIdem = new IdempotencyKey();
+        ReflectionTestUtils.setField(processingIdem, "id", 1L);
+        processingIdem.setStatus(IdempotencyStatus.PROCESSING);
+        when(idempotencyService.findOrCreateProcessing(any(), any(), any(), any()))
+                .thenReturn(processingIdem);
     }
 
     // ─── createOrder ─────────────────────────────────────────────────────────
@@ -197,10 +209,10 @@ class OrderServiceTest {
         @Test
         void throws_CART_NOT_FOUND_when_no_active_cart() {
             Customer cust = customer(uuid(1));
-            when(cartRepository.findByCustomerIdAndStatus(uuid(1), CartStatus.ACTIVE))
+            when(cartRepository.findByCustomerIdAndStatusWithLock(uuid(1), CartStatus.ACTIVE))
                     .thenReturn(Optional.empty());
 
-            assertThatThrownBy(() -> orderService.createOrder(cust, createRequest(uuid(10), null)))
+            assertThatThrownBy(() -> orderService.createOrder(cust, createRequest(uuid(10), null), "idem-key"))
                     .isInstanceOf(AppException.class)
                     .extracting(e -> ((AppException) e).getErrorCode())
                     .isEqualTo(ErrorCode.CART_NOT_FOUND);
@@ -210,11 +222,11 @@ class OrderServiceTest {
         void throws_ORDER_EMPTY_when_cart_has_no_items() {
             Customer cust = customer(uuid(1));
             Cart cart = activeCart(uuid(5), cust);
-            when(cartRepository.findByCustomerIdAndStatus(uuid(1), CartStatus.ACTIVE))
+            when(cartRepository.findByCustomerIdAndStatusWithLock(uuid(1), CartStatus.ACTIVE))
                     .thenReturn(Optional.of(cart));
             when(cartItemRepository.findByCartIdOrderByCreatedAtAsc(uuid(5))).thenReturn(List.of());
 
-            assertThatThrownBy(() -> orderService.createOrder(cust, createRequest(uuid(10), null)))
+            assertThatThrownBy(() -> orderService.createOrder(cust, createRequest(uuid(10), null), "idem-key"))
                     .isInstanceOf(AppException.class)
                     .extracting(e -> ((AppException) e).getErrorCode())
                     .isEqualTo(ErrorCode.ORDER_EMPTY);
@@ -227,12 +239,12 @@ class OrderServiceTest {
             ProductVariant v = variant(uuid(1), new BigDecimal("100000"), null);
             CartItem ci = cartItem(cart, v, 2);
 
-            when(cartRepository.findByCustomerIdAndStatus(uuid(1), CartStatus.ACTIVE))
+            when(cartRepository.findByCustomerIdAndStatusWithLock(uuid(1), CartStatus.ACTIVE))
                     .thenReturn(Optional.of(cart));
             when(cartItemRepository.findByCartIdOrderByCreatedAtAsc(uuid(5))).thenReturn(List.of(ci));
             when(addressRepository.findByIdAndDeletedFalse(uuid(99))).thenReturn(Optional.empty());
 
-            assertThatThrownBy(() -> orderService.createOrder(cust, createRequest(uuid(99), null)))
+            assertThatThrownBy(() -> orderService.createOrder(cust, createRequest(uuid(99), null), "idem-key"))
                     .isInstanceOf(AppException.class)
                     .extracting(e -> ((AppException) e).getErrorCode())
                     .isEqualTo(ErrorCode.ADDRESS_NOT_FOUND);
@@ -247,12 +259,12 @@ class OrderServiceTest {
             CartItem ci = cartItem(cart, v, 2);
             Address addr = address(uuid(10), otherCustomer);  // different owner
 
-            when(cartRepository.findByCustomerIdAndStatus(uuid(1), CartStatus.ACTIVE))
+            when(cartRepository.findByCustomerIdAndStatusWithLock(uuid(1), CartStatus.ACTIVE))
                     .thenReturn(Optional.of(cart));
             when(cartItemRepository.findByCartIdOrderByCreatedAtAsc(uuid(5))).thenReturn(List.of(ci));
             when(addressRepository.findByIdAndDeletedFalse(uuid(10))).thenReturn(Optional.of(addr));
 
-            assertThatThrownBy(() -> orderService.createOrder(cust, createRequest(uuid(10), null)))
+            assertThatThrownBy(() -> orderService.createOrder(cust, createRequest(uuid(10), null), "idem-key"))
                     .isInstanceOf(AppException.class)
                     .extracting(e -> ((AppException) e).getErrorCode())
                     .isEqualTo(ErrorCode.ADDRESS_NOT_FOUND);
@@ -266,13 +278,13 @@ class OrderServiceTest {
             CartItem ci = cartItem(cart, v, 2);
             Address addr = address(uuid(10), cust);
 
-            when(cartRepository.findByCustomerIdAndStatus(uuid(1), CartStatus.ACTIVE))
+            when(cartRepository.findByCustomerIdAndStatusWithLock(uuid(1), CartStatus.ACTIVE))
                     .thenReturn(Optional.of(cart));
             when(cartItemRepository.findByCartIdOrderByCreatedAtAsc(uuid(5))).thenReturn(List.of(ci));
             when(addressRepository.findByIdAndDeletedFalse(uuid(10))).thenReturn(Optional.of(addr));
             when(inventoryRepository.findByVariantIdIn(List.of(uuid(1)))).thenReturn(List.of());
 
-            assertThatThrownBy(() -> orderService.createOrder(cust, createRequest(uuid(10), null)))
+            assertThatThrownBy(() -> orderService.createOrder(cust, createRequest(uuid(10), null), "idem-key"))
                     .isInstanceOf(AppException.class)
                     .extracting(e -> ((AppException) e).getErrorCode())
                     .isEqualTo(ErrorCode.INVENTORY_NOT_FOUND);
@@ -289,7 +301,7 @@ class OrderServiceTest {
 
             stubSuccessfulCreateOrder(cust, cart, List.of(ci), addr, List.of(inv));
 
-            orderService.createOrder(cust, createRequest(uuid(10), "COD"));
+            orderService.createOrder(cust, createRequest(uuid(10), "COD"), "idem-key");
 
             ArgumentCaptor<Order> captor = ArgumentCaptor.forClass(Order.class);
             verify(orderRepository).save(captor.capture());
@@ -308,7 +320,7 @@ class OrderServiceTest {
 
             stubSuccessfulCreateOrder(cust, cart, List.of(ci), addr, List.of(inv));
 
-            orderService.createOrder(cust, createRequest(uuid(10), "ONLINE"));
+            orderService.createOrder(cust, createRequest(uuid(10), "ONLINE"), "idem-key");
 
             ArgumentCaptor<Order> captor = ArgumentCaptor.forClass(Order.class);
             verify(orderRepository).save(captor.capture());
@@ -327,7 +339,7 @@ class OrderServiceTest {
 
             stubSuccessfulCreateOrder(cust, cart, List.of(ci), addr, List.of(inv));
 
-            orderService.createOrder(cust, createRequest(uuid(10), "COD"));
+            orderService.createOrder(cust, createRequest(uuid(10), "COD"), "idem-key");
 
             verify(paymentService).createCodPayment(any(Order.class));
         }
@@ -343,7 +355,7 @@ class OrderServiceTest {
 
             stubSuccessfulCreateOrder(cust, cart, List.of(ci), addr, List.of(inv));
 
-            orderService.createOrder(cust, createRequest(uuid(10), "ONLINE"));
+            orderService.createOrder(cust, createRequest(uuid(10), "ONLINE"), "idem-key");
 
             verify(paymentService, never()).createCodPayment(any());
         }
@@ -359,7 +371,7 @@ class OrderServiceTest {
 
             stubSuccessfulCreateOrder(cust, cart, List.of(ci), addr, List.of(inv));
 
-            orderService.createOrder(cust, createRequest(uuid(10), "COD"));
+            orderService.createOrder(cust, createRequest(uuid(10), "COD"), "idem-key");
 
             verify(cartRepository).save(argThat(c -> c.getStatus() == CartStatus.CHECKED_OUT));
         }
@@ -377,7 +389,7 @@ class OrderServiceTest {
 
             stubSuccessfulCreateOrder(cust, cart, List.of(ci), addr, List.of(inv));
 
-            orderService.createOrder(cust, createRequest(uuid(10), "COD"));
+            orderService.createOrder(cust, createRequest(uuid(10), "COD"), "idem-key");
 
             ArgumentCaptor<Order> captor = ArgumentCaptor.forClass(Order.class);
             verify(orderRepository).save(captor.capture());
@@ -397,7 +409,7 @@ class OrderServiceTest {
 
             stubSuccessfulCreateOrder(cust, cart, List.of(ci), addr, List.of(inv));
 
-            orderService.createOrder(cust, createRequest(uuid(10), "COD"));
+            orderService.createOrder(cust, createRequest(uuid(10), "COD"), "idem-key");
 
             ArgumentCaptor<Order> captor = ArgumentCaptor.forClass(Order.class);
             verify(orderRepository).save(captor.capture());
@@ -415,7 +427,7 @@ class OrderServiceTest {
 
             stubSuccessfulCreateOrder(cust, cart, List.of(ci), addr, List.of(inv));
 
-            orderService.createOrder(cust, createRequest(uuid(10), "COD"));
+            orderService.createOrder(cust, createRequest(uuid(10), "COD"), "idem-key");
 
             ArgumentCaptor<Order> captor = ArgumentCaptor.forClass(Order.class);
             verify(orderRepository).save(captor.capture());
@@ -443,7 +455,7 @@ class OrderServiceTest {
 
             stubSuccessfulCreateOrder(cust, cart, List.of(ci), addr, List.of(invA, invB));
 
-            orderService.createOrder(cust, createRequest(uuid(10), "COD"));
+            orderService.createOrder(cust, createRequest(uuid(10), "COD"), "idem-key");
 
             // Should reserve from warehouse 2 (available=18 > available=2)
             verify(inventoryService).reserveStock(argThat(req -> uuid(2).equals(req.getWarehouseId())));
@@ -461,7 +473,7 @@ class OrderServiceTest {
             Inventory inv1 = inventory(uuid(20), v1, 10, 0);
             Inventory inv2 = inventory(uuid(21), v2, 10, 0);
 
-            when(cartRepository.findByCustomerIdAndStatus(uuid(1), CartStatus.ACTIVE))
+            when(cartRepository.findByCustomerIdAndStatusWithLock(uuid(1), CartStatus.ACTIVE))
                     .thenReturn(Optional.of(cart));
             when(cartItemRepository.findByCartIdOrderByCreatedAtAsc(uuid(5)))
                     .thenReturn(List.of(ci1, ci2));
@@ -471,7 +483,7 @@ class OrderServiceTest {
             when(orderItemRepository.findByOrderIdOrderByCreatedAtAsc(any(UUID.class)))
                     .thenReturn(List.of());
 
-            orderService.createOrder(cust, createRequest(uuid(10), "COD"));
+            orderService.createOrder(cust, createRequest(uuid(10), "COD"), "idem-key");
 
             verify(inventoryService, times(2)).reserveStock(any());
         }
@@ -479,7 +491,7 @@ class OrderServiceTest {
         // helper: stubs all the happy-path repository calls for a single-item order
         private void stubSuccessfulCreateOrder(Customer cust, Cart cart, List<CartItem> items,
                                                 Address addr, List<Inventory> inventories) {
-            when(cartRepository.findByCustomerIdAndStatus(cust.getId(), CartStatus.ACTIVE))
+            when(cartRepository.findByCustomerIdAndStatusWithLock(cust.getId(), CartStatus.ACTIVE))
                     .thenReturn(Optional.of(cart));
             when(cartItemRepository.findByCartIdOrderByCreatedAtAsc(cart.getId()))
                     .thenReturn(items);

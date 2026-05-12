@@ -1,5 +1,6 @@
 package com.locnguyen.ecommerce.common.config;
 
+import com.locnguyen.ecommerce.common.security.CsrfDoubleSubmitFilter;
 import com.locnguyen.ecommerce.common.security.JwtAccessDeniedHandler;
 import com.locnguyen.ecommerce.common.security.JwtAuthenticationEntryPoint;
 import com.locnguyen.ecommerce.common.security.JwtAuthenticationFilter;
@@ -28,8 +29,9 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
  * Central security configuration for the application.
  *
  * <h2>Authentication model</h2>
- * Stateless JWT — every request must carry a valid Bearer token in the
- * {@code Authorization} header. No sessions, no cookies.
+ * Stateless JWT — protected API requests carry a valid Bearer token in the
+ * {@code Authorization} header, while refresh-token rotation uses an HttpOnly
+ * cookie only on the auth endpoints.
  *
  * <h2>Role hierarchy</h2>
  * <pre>
@@ -41,6 +43,7 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
  * <h2>Endpoint access matrix</h2>
  * <pre>
  *   Public (no token)            → /api/v1/auth/**, GET /api/v1/products/**, swagger, health
+ *                                   POST /api/v1/payments/callback (gateway callback)
  *   Authenticated (any role)     → /api/v1/cart/**, /api/v1/orders/**, /api/v1/profile/**
  *   ADMIN / SUPER_ADMIN only     → /api/v1/admin/**
  *   STAFF / ADMIN / SUPER_ADMIN  → [handled via @PreAuthorize on individual endpoints]
@@ -62,6 +65,7 @@ public class SecurityConfig {
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
     private final JwtAuthenticationEntryPoint jwtAuthenticationEntryPoint;
     private final JwtAccessDeniedHandler jwtAccessDeniedHandler;
+    private final CsrfDoubleSubmitFilter csrfDoubleSubmitFilter;
 
     // ─── Endpoint whitelists ─────────────────────────────────────────────────
 
@@ -70,6 +74,15 @@ public class SecurityConfig {
             "/api/v1/auth/register",
             "/api/v1/auth/login",
             "/api/v1/auth/refresh-token",
+            "/api/v1/auth/logout",
+            "/api/v1/auth/password/forgot",
+            "/api/v1/auth/password/forgot/verify",
+            "/api/v1/auth/password/reset",
+            // Payment gateway callback — called server-to-server by the provider.
+            // No bearer token is available on the gateway side.
+            // IMPORTANT: HMAC/signature verification inside processCallback is the
+            // only guard against spoofed callbacks until it is fully implemented.
+            "/api/v1/payments/callback",
     };
 
     /** Public GET-only endpoints for product browsing. */
@@ -96,7 +109,8 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
-                // Disable CSRF — not needed for stateless JWT APIs
+                // Disable CSRF — this API remains stateless; auth-cookie refresh relies on
+                // SameSite/path/origin restrictions rather than server-side CSRF tokens.
                 .csrf(AbstractHttpConfigurer::disable)
 
                 // CORS — delegates to WebMvcConfig.addCorsMappings()
@@ -133,10 +147,21 @@ public class SecurityConfig {
                         .anyRequest().authenticated()
                 )
 
+                // ── CSRF double-submit (gated) ─────────────────────────────
+                // Issues / validates the XSRF-TOKEN cookie + X-XSRF-TOKEN header
+                // pair on cookie-mutating endpoints. Toggleable via
+                // app.security.csrf-double-submit-enabled. Registered before the
+                // JWT filter so unauthenticated cookie-only flows
+                // (refresh-token / logout) are still protected.
+                .addFilterBefore(csrfDoubleSubmitFilter,
+                        UsernamePasswordAuthenticationFilter.class)
+
                 // ── JWT filter ─────────────────────────────────────────────
                 // Placed before UsernamePasswordAuthenticationFilter to validate
                 // the Bearer token and populate SecurityContext before any
-                // form-based auth filter runs (which we don't use, but for ordering correctness)
+                // form-based auth filter runs (which we don't use, but for ordering correctness).
+                // Registered after CSRF — both anchor to UsernamePasswordAuthenticationFilter,
+                // and the JWT filter ends up last (closer to the anchor).
                 .addFilterBefore(jwtAuthenticationFilter,
                         UsernamePasswordAuthenticationFilter.class);
 

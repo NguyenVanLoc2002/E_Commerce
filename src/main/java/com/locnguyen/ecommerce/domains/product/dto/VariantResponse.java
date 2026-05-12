@@ -6,6 +6,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Builder;
 import lombok.Getter;
 
+import java.io.Serializable;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
@@ -14,7 +15,8 @@ import java.util.UUID;
 @Builder
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @Schema(description = "Product variant detail")
-public class VariantResponse {
+public class VariantResponse implements Serializable {
+    private static final long serialVersionUID = 1L;
 
     private final UUID id;
     private final UUID productId;

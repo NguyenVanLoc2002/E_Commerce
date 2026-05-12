@@ -16,6 +16,7 @@ import com.locnguyen.ecommerce.domains.product.entity.Product;
 import com.locnguyen.ecommerce.domains.productvariant.entity.ProductVariant;
 import com.locnguyen.ecommerce.domains.productvariant.enums.ProductVariantStatus;
 import com.locnguyen.ecommerce.domains.productvariant.repository.ProductVariantRepository;
+import com.locnguyen.ecommerce.domains.cart.service.impl.CartServiceImpl;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -56,7 +57,7 @@ class CartServiceTest {
     @Mock ProductVariantRepository productVariantRepository;
     @Mock InventoryRepository inventoryRepository;
 
-    @InjectMocks CartService cartService;
+    @InjectMocks CartServiceImpl cartService;
 
     // ─── factories ───────────────────────────────────────────────────────────
 

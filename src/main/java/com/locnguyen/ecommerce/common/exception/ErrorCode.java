@@ -18,6 +18,8 @@ public enum ErrorCode {
     NOT_FOUND(HttpStatus.NOT_FOUND, "NOT_FOUND", "Resource not found"),
     VALIDATION_ERROR(HttpStatus.UNPROCESSABLE_ENTITY, "VALIDATION_ERROR", "Validation failed"),
     CONFLICT(HttpStatus.CONFLICT, "CONFLICT", "Resource conflict"),
+    CONCURRENT_MODIFICATION(HttpStatus.CONFLICT, "CONCURRENT_MODIFICATION",
+            "Resource was modified concurrently. Please reload and retry."),
     INTERNAL_SERVER_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_SERVER_ERROR",
             "An internal error occurred. Please try again later."),
 
@@ -170,7 +172,42 @@ public enum ErrorCode {
 
     // ─── Notification ───────────────────────────────────────────────────────
     NOTIFICATION_NOT_FOUND(HttpStatus.NOT_FOUND, "NOTIFICATION_NOT_FOUND",
-            "Notification not found");
+            "Notification not found"),
+
+    // ─── OTP / Password Reset ───────────────────────────────────────────────
+    OTP_INVALID(HttpStatus.UNPROCESSABLE_ENTITY, "OTP_INVALID", "OTP is invalid"),
+    OTP_EXPIRED(HttpStatus.UNPROCESSABLE_ENTITY, "OTP_EXPIRED", "OTP has expired"),
+    OTP_USED(HttpStatus.CONFLICT, "OTP_USED", "OTP has already been used"),
+    OTP_TOO_MANY_ATTEMPTS(HttpStatus.TOO_MANY_REQUESTS, "OTP_TOO_MANY_ATTEMPTS",
+            "Too many OTP attempts"),
+    OTP_RATE_LIMITED(HttpStatus.TOO_MANY_REQUESTS, "OTP_RATE_LIMITED",
+            "Too many OTP requests, please wait"),
+    PASSWORD_MISMATCH(HttpStatus.UNPROCESSABLE_ENTITY, "PASSWORD_MISMATCH",
+            "Passwords do not match"),
+    CURRENT_PASSWORD_INVALID(HttpStatus.UNPROCESSABLE_ENTITY, "CURRENT_PASSWORD_INVALID",
+            "Current password is incorrect"),
+    RESET_TOKEN_INVALID(HttpStatus.UNPROCESSABLE_ENTITY, "RESET_TOKEN_INVALID",
+            "Reset token is invalid"),
+    RESET_TOKEN_EXPIRED(HttpStatus.UNPROCESSABLE_ENTITY, "RESET_TOKEN_EXPIRED",
+            "Reset token has expired"),
+    PASSWORD_POLICY_VIOLATED(HttpStatus.UNPROCESSABLE_ENTITY, "PASSWORD_POLICY_VIOLATED",
+            "Password does not meet the required policy"),
+    PASSWORD_REUSED(HttpStatus.UNPROCESSABLE_ENTITY, "PASSWORD_REUSED",
+            "New password must be different from the current password"),
+    CSRF_TOKEN_INVALID(HttpStatus.FORBIDDEN, "CSRF_TOKEN_INVALID",
+            "CSRF token is missing or invalid"),
+
+    // ─── Idempotency ────────────────────────────────────────────────────────
+    IDEMPOTENCY_KEY_REQUIRED(HttpStatus.BAD_REQUEST, "IDEMPOTENCY_KEY_REQUIRED",
+            "Idempotency-Key header is required for this operation"),
+    IDEMPOTENCY_KEY_TOO_LONG(HttpStatus.BAD_REQUEST, "IDEMPOTENCY_KEY_TOO_LONG",
+            "Idempotency-Key must not exceed 100 characters"),
+    IDEMPOTENCY_KEY_CONFLICT(HttpStatus.CONFLICT, "IDEMPOTENCY_KEY_CONFLICT",
+            "Idempotency-Key was used with a different request payload"),
+    IDEMPOTENCY_REQUEST_IN_PROGRESS(HttpStatus.CONFLICT, "IDEMPOTENCY_REQUEST_IN_PROGRESS",
+            "A request with this Idempotency-Key is already in progress"),
+    IDEMPOTENCY_REPLAY_NOT_AVAILABLE(HttpStatus.CONFLICT, "IDEMPOTENCY_REPLAY_NOT_AVAILABLE",
+            "Idempotency replay is not available for this operation");
 
     // ────────────────────────────────────────────────────────────────────────
 

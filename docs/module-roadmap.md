@@ -165,6 +165,11 @@ Tài liệu mô tả roadmap triển khai các module backend theo thứ tự t�
 - Redis caching (category, brand, product detail)
 - rate limiting
 - search optimization (keyword filter, full-text nếu cần)
+  - **Done**: product keyword search migrated từ `LIKE '%keyword%'` sang
+    MariaDB FULLTEXT trên cột denormalized `products.search_text`
+    (case- và accent-insensitive). Public query params không đổi.
+    Reindex endpoint: `POST /api/v1/admin/products/search/reindex`.
+    Elasticsearch không introduce ở phase này.
 
 ---
 

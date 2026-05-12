@@ -19,6 +19,10 @@ Shared response, error, auth, enum, and pagination rules are defined in [api-com
 ## 1. Access model
 
 - All routes here require `Authorization: Bearer <accessToken>`.
+- Admin and staff users authenticate through the same public `POST /api/v1/auth/login` endpoint used by customers.
+- The shared auth backend returns only the access token in the JSON response body for all user types.
+- The shared auth backend stores the refresh token in an HttpOnly cookie for all user types.
+- There is no separate admin login controller or separate admin refresh-token mechanism.
 - URL-level access for `/api/v1/admin/**`: `STAFF`, `ADMIN`, or `SUPER_ADMIN`
 - Some endpoints are stricter via `@PreAuthorize`.
 
@@ -127,13 +131,25 @@ Role summary by module:
 - Access: `ADMIN`, `SUPER_ADMIN`
 - Description: list all products, including non-public statuses
 - Soft-delete behavior:
-  - soft-deleted products are excluded by default
+  - soft-deleted products are excluded by default; `isDeleted=true` returns
+    soft-deleted only, `includeDeleted=true` returns both
 - Filters:
   - `keyword`, `categoryId`, `brandId`, `status`, `minPrice`, `maxPrice`, `featured`
   - `isDeleted`, `includeDeleted`
 - Pagination:
   - `page`, `size`, `sort`
   - default: `size=20`, `sort=createdAt,desc`
+- Keyword search:
+  - When `keyword` is blank the standard JPA Specification is used.
+  - When `keyword` has text MariaDB FULLTEXT is used:
+    `MATCH(products.name, products.slug, products.search_text) AGAINST (? IN BOOLEAN MODE)`.
+  - Search is case-insensitive and accent-insensitive (`Áo` → `ao`,
+    `Đầm` → `dam`); reserved BOOLEAN MODE characters in user input are stripped.
+  - Results are ordered by FULLTEXT relevance first, then by the requested
+    `sort` (whitelisted: `createdAt`, `updatedAt`, `name`, `status`, `featured`).
+  - `minPrice` / `maxPrice` must match the **same** variant; soft-deleted
+    variants are excluded.
+  - `products.search_text` is internal — never returned.
 - Response:
   - `ApiResponse<PagedResponse<ProductListItemResponse>>`
 
@@ -208,6 +224,16 @@ Role summary by module:
   - `UpdateVariantRequest`
 - Response:
   - `ApiResponse<VariantResponse>`
+
+### POST `/api/v1/admin/products/search/reindex`
+
+- Access: `ADMIN`, `SUPER_ADMIN`
+- Description: rebuild `products.search_text` for every active product.
+  Run once after deploying the FULLTEXT migration (V17) and any time a bulk
+  data fix has bypassed the create/update service path. Processes products
+  in batches of 200 inside per-batch transactions.
+- Response:
+  - `ApiResponse<ReindexResult>` where `ReindexResult = { totalProcessed }`
 
 ### DELETE `/api/v1/admin/products/{productId}/variants/{variantId}`
 

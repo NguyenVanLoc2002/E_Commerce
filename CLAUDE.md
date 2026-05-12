@@ -1,112 +1,43 @@
 # CLAUDE.md
 
-## 1. Project Overview
+## 1. Project Context
+Backend for a fashion e-commerce platform serving Admin Web, Customer Web, Mobile App, and Backend API.
 
-Đây là backend cho hệ thống **Web bán quần áo đa nền tảng**, phục vụ:
+Architecture: **Modular Monolith**.
 
-- **Admin Web**: ReactJS
-- **Customer Web**: ReactJS
-- **Mobile App**: React Native
-- **Backend API**: Java Spring Boot (triển khai trước)
+Goal: build a clean, secure, maintainable Spring Boot backend for an e-commerce MVP, with clear module boundaries and production-oriented code.
 
-Kiến trúc hiện tại ưu tiên theo hướng **Modular Monolith**, dễ phát triển nhanh trong giai đoạn đầu, nhưng vẫn có cấu trúc đủ tốt để tách module hoặc chuyển hướng microservices sau này nếu hệ thống tăng trưởng mạnh.
+Core domains: auth, user, customer, address, category, brand, product, product variant, product attribute, inventory, cart, wishlist, order, payment, promotion, shipment, invoice, review, notification, admin.
 
-Project tập trung vào các nghiệp vụ cốt lõi của e-commerce thời trang:
+## 2. Tech Stack
+Backend: Java 17, Spring Boot 3.x, Spring Web, Spring Security, Spring Data JPA, Spring Validation, Spring Cache, OpenAPI/Swagger, Flyway, Maven, Lombok, MapStruct.
 
-- Authentication / Authorization
-- User / Customer
-- Product / Category / Brand / Collection
-- Product Variant (size, màu, SKU)
-- Inventory
-- Cart
-- Wishlist
-- Order / OrderItem
-- Payment / PaymentTransaction
-- Promotion / Voucher / Coupon
-- Shipment / Invoice
-- Review / Rating
-- Notification
-- Admin management
+Infrastructure: MariaDB, Redis, Docker/Docker Compose, MinIO or S3-compatible storage when media storage is needed.
 
----
+Rules:
+- Do not add heavy dependencies without a clear production reason.
+- Preserve existing project conventions unless a change is clearly justified.
 
-## 2. Business Goal
-
-Mục tiêu của hệ thống:
-
-1. Cung cấp API ổn định cho Admin Web, Customer Web và Mobile App.
-2. Hỗ trợ bán sản phẩm thời trang có **biến thể** như:
-   - màu sắc
-   - kích thước
-   - chất liệu (nếu có)
-3. Quản lý tồn kho theo từng biến thể.
-4. Hỗ trợ giỏ hàng, đặt hàng, thanh toán, voucher, khuyến mãi.
-5. Dễ mở rộng về sau:
-   - nhiều kho
-   - nhiều cổng thanh toán
-   - nhiều chương trình khuyến mãi
-   - loyalty / tích điểm
-   - recommendation
-   - report / analytics
-
----
-
-## 3. Tech Stack
-
-### Backend
-- Java 17 hoặc 21
-- Spring Boot 3.x
-- Spring Web
-- Spring Security
-- Spring Data JPA
-- Spring Validation
-- Spring Cache
-- OpenAPI / Swagger
-- Flyway
-
-### Database
-- MariaDB là database chính
-- Redis cho cache / token / rate limit / OTP / dữ liệu tạm
-- MongoDB **chưa bắt buộc** ở phase đầu
-
-### Build Tool
-- Maven
-
-### Other
-- Lombok
-- MapStruct
-- Docker / Docker Compose
-- MinIO hoặc S3-compatible storage cho media sau này
-
----
-
-## 4. Project Architecture Principles
-
-### 4.1. Architecture style
-Project theo hướng **Modular Monolith**:
-
-- chung một codebase
-- chung một database chính
-- chia rõ domain/module
-- hạn chế coupling trực tiếp giữa các module
-
-### 4.2. Package structure guideline
+## 3. Package Structure
+Base package should match the actual project package:
 
 ```text
-src/main/java/com/fit/fashion_shop
-│
+com.locnguyen.ecommerce
+```
+
+Recommended structure:
+
+```text
+src/main/java/com/locnguyen/ecommerce
 ├── common
 │   ├── config
+│   ├── constants
 │   ├── exception
 │   ├── response
 │   ├── security
-│   ├── utils
-│   ├── constants
-│   ├── enums
-│   ├── mapper
 │   ├── validation
-│   └── auditing
-│
+│   ├── auditing
+│   └── utils
 ├── domains
 │   ├── auth
 │   ├── user
@@ -115,8 +46,6 @@ src/main/java/com/fit/fashion_shop
 │   ├── category
 │   ├── brand
 │   ├── product
-│   ├── product_variant
-│   ├── collection
 │   ├── inventory
 │   ├── cart
 │   ├── wishlist
@@ -126,463 +55,225 @@ src/main/java/com/fit/fashion_shop
 │   ├── shipment
 │   ├── invoice
 │   ├── review
-│   ├── notification
-│   └── admin
-│
-├── infrastructure
-│   ├── external
-│   ├── storage
-│   ├── cache
-│   └── messaging
-│
-└── FashionShopApplication.java
+│   └── notification
+└── infrastructure
+    ├── cache
+    ├── storage
+    ├── external
+    └── messaging
 ```
 
-### 4.3. Layering trong mỗi module
-Mỗi module nên có tối thiểu:
+Each domain module usually contains: controller, service, repository, entity, dto, mapper, specification/query, enum.
 
-- controller
-- service
-- dto
-- entity
-- repository
-- mapper
-- specification hoặc query
-- converter nếu cần
-- enum nếu module có enum riêng
+## 4. Coding Principles
+Rules:
+- Write production-oriented code, not temporary happy-path code.
+- Prefer clear naming over short naming.
+- Do not put business logic in controllers.
+- Do not expose JPA entities directly in API responses.
+- Use request DTOs and response DTOs.
+- Use MapStruct or explicit mapper classes.
+- Keep transaction boundaries in the service layer.
+- Avoid unrelated refactors in the same task.
+- Avoid hidden side effects across modules.
 
-Ví dụ:
+Layer responsibility:
+- Controller: receive request, validate DTO, call service, return response.
+- Service: business validation, orchestration, transaction boundary.
+- Repository: data access only.
+- Mapper: entity/DTO conversion only.
+- Specification/query: filtering, searching, dynamic query logic.
+
+Before finishing code changes, check compile errors, broken imports, validation, authorization, transaction boundary, N+1 query risk, pagination/sorting, sensitive logs, and response wrapper consistency.
+
+## 5. API Standards
+Base API prefix:
 
 ```text
-domains/product
-├── controller
-├── service
-├── dto
-├── entity
-├── repository
-├── mapper
-├── specification
-└── enum
-```
-
----
-
-## 5. Core Business Modeling Rules
-
-### 5.1. Product vs Variant
-- **Product** là thực thể cha, mang ý nghĩa sản phẩm bán ra
-- **ProductVariant** là đơn vị bán thực tế
-
-Ví dụ:
-- Product: Áo thun basic nam
-- Variant 1: màu trắng, size M
-- Variant 2: màu trắng, size L
-- Variant 3: màu đen, size M
-
-### 5.2. Inventory tracking
-Tồn kho phải được quản lý theo variant, không theo product cha.
-
-### 5.3. Order item snapshot
-OrderItem phải lưu snapshot dữ liệu tại thời điểm đặt hàng:
-- product name
-- variant name
-- sku
-- unit price
-- quantity
-- line total
-- discount amount
-
-Không phụ thuộc hoàn toàn vào dữ liệu product hiện tại.
-
-### 5.4. Order address snapshot
-Order phải lưu snapshot địa chỉ giao hàng tại thời điểm đặt hàng:
-- recipient_name
-- recipient_phone
-- full address (street, ward, district, province)
-
-Không lưu foreign key trỏ về bảng `addresses` vì customer có thể sửa/xóa địa chỉ sau khi đặt hàng.
-
-### 5.5. Cart item price
-`CartItem` **không** lưu giá cố định. Giá phải được tính lại từ `ProductVariant` tại thời điểm checkout.  
-Nếu cần hiển thị giá trong giỏ, lấy từ variant hiện tại, không cache trong cart_items.
-
-### 5.6. Payment design
-Không chỉ có bảng `payments`. Bắt buộc nên có:
-- `payments`
-- `payment_transactions`
-
-### 5.7. Promotion design
-Phân biệt:
-- **Promotion**: chương trình khuyến mãi
-- **Voucher**: mã giảm giá
-- **PromotionRule**: điều kiện áp dụng
-- **VoucherUsage**: lịch sử sử dụng
-
-### 5.8. Soft delete
-Áp dụng soft delete cho các bảng cấu hình / dữ liệu quản trị:
-- users
-- products
-- categories
-- brands
-- vouchers
-- banners
-
-Không lạm dụng soft delete cho các bảng log lớn.
-
-### 5.9. Optimistic locking cho inventory
-Bảng `inventories` phải có cột `version` (`@Version` của JPA) để tránh oversell khi concurrent requests.
-
----
-
-## 6. Domain List
-
-### Identity & Access
-- auth
-- users
-- roles
-- permissions
-- refresh tokens
-
-### Catalog
-- categories
-- brands
-- products
-- product_variants
-- product_media
-- product_attributes
-- product_attribute_values
-- collections
-- collection_products
-
-### Commerce
-- carts
-- cart_items
-- wishlists
-- wishlist_items
-- orders
-- order_items
-- shipments
-- invoices
-
-### Inventory
-- warehouses
-- inventories
-- stock_movements
-- inventory_reservations
-
-### Payment
-- payments
-- payment_transactions
-- refunds
-
-### Promotion
-- promotions
-- promotion_rules
-- vouchers
-- voucher_usages
-
-### Engagement
-- reviews
-- notifications
-- banners
-- cms_pages
-
-### Administration
-- admin users
-- audit logs
-- dashboard/report queries
-
----
-
-## 7. Coding Principles
-
-### 7.1. General
-- Code phải rõ ràng, dễ đọc, dễ bảo trì
-- Ưu tiên naming chính xác hơn code ngắn
-- Không viết business logic trực tiếp trong controller
-- Không expose entity trực tiếp ra API
-
-### 7.2. Controller
-Controller chỉ nên:
-- nhận request
-- validate input
-- gọi service
-- trả response chuẩn
-
-Không chứa business logic phức tạp.
-
-### 7.3. Service
-Service là nơi xử lý nghiệp vụ chính:
-- validate business
-- orchestration
-- transaction boundary
-- phối hợp nhiều repository/module
-
-### 7.4. Repository
-Repository chỉ truy cập dữ liệu. Không chứa business logic nặng.
-
-### 7.5. DTO
-Phân tách rõ:
-- request DTO
-- response DTO
-- internal DTO nếu cần
-
-### 7.6. Mapper
-Dùng MapStruct hoặc mapper rõ ràng. Không nhét mapping lằng nhằng trong controller/service.
-
----
-
-## 8. Validation Rules
-
-### 8.1. DTO validation
-Luôn validate ở request DTO bằng:
-- `@NotNull`
-- `@NotBlank`
-- `@Size`
-- `@Email`
-- `@Positive`
-- `@Min`
-- `@Max`
-
-### 8.2. Business validation
-Ngoài annotation, business rule phải kiểm tra trong service:
-- quantity không vượt tồn kho khả dụng
-- voucher còn hạn
-- salePrice không lớn hơn basePrice
-- order không được cancel ở trạng thái không hợp lệ
-- payment callback không được xử lý lặp
-
----
-
-## 9. API Design Rules
-
-### 9.1. Base path
-Tất cả API dùng prefix:
-```
 /api/v1
 ```
 
-### 9.2. Response wrapper
-Tất cả response dùng chuẩn thống nhất:
-- `success`
-- `code`
-- `message`
-- `data`
-- `timestamp`
-- `path` (đối với lỗi)
+Response wrapper must be consistent:
 
-### 9.3. Pagination
-List API phải hỗ trợ:
-- `page`
-- `size`
-- `sort`
-
-### 9.4. Versioning
-Breaking change phải tạo version mới:
-- `/api/v2/...`
-
-### 9.5. Auth
-Dùng Bearer JWT:
-```
-Authorization: Bearer <token>
+```json
+{
+  "success": true,
+  "code": "SUCCESS",
+  "message": "...",
+  "data": {},
+  "timestamp": "..."
+}
 ```
 
-### 9.6. Payment callback / Webhook
-Endpoint nhận callback từ payment gateway phải:
-- có prefix riêng: `/api/v1/webhooks/payment/{provider}`
-- validate chữ ký (signature/HMAC) trước khi xử lý
-- trả `200 OK` nhanh, xử lý nghiệp vụ async hoặc sau đó
-- idempotent: không xử lý lặp cùng transaction
+API rules:
+- Admin APIs should be under `/api/v1/admin/...`.
+- Customer-facing APIs should be under `/api/v1/...`.
+- Breaking changes should use a new version, for example `/api/v2`.
+- List APIs must support pagination and sorting.
+- Prefer Spring `Pageable` with `@PageableDefault`.
+- Filter DTOs may be bound from query parameters by Spring.
+- Payment webhooks should use `/api/v1/webhooks/payment/{provider}`.
+- Webhooks must validate signature/HMAC and be idempotent.
 
----
+Preferred pagination style:
 
-## 10. Error Handling Rules
-
-Dùng global exception handling.
-
-Phân loại lỗi:
-- validation error
-- auth error
-- permission error
-- not found
-- conflict
-- business rule violation
-- internal server error
-
-Ví dụ business errors:
-- `PRODUCT_NOT_FOUND`
-- `VARIANT_NOT_FOUND`
-- `INVENTORY_NOT_ENOUGH`
-- `VOUCHER_INVALID`
-- `ORDER_STATUS_INVALID`
-- `PAYMENT_FAILED`
-
----
-
-## 11. Database Rules
-
-### 11.1. Database chính
-MariaDB là nguồn dữ liệu chính.
-
-### 11.2. Migration
-Mọi thay đổi schema phải đi qua Flyway migration.  
-Không dùng `ddl-auto=create` hoặc `ddl-auto=update` trên production.
-
-### 11.3. Money
-Tất cả cột tiền tệ dùng:
-```sql
-DECIMAL(18,2)
+```java
+@PageableDefault(
+    size = AppConstants.DEFAULT_PAGE_SIZE,
+    sort = "createdAt",
+    direction = Sort.Direction.DESC
+) Pageable pageable
 ```
 
-### 11.4. Key strategy
-Khuyến nghị:
-- `BIGINT` auto increment cho PK nội bộ
-- `code` business riêng cho hiển thị công khai
+## 6. Validation and Error Handling
+Request DTOs should use Bean Validation: `@NotNull`, `@NotBlank`, `@Size`, `@Email`, `@Positive`, `@Min`, `@Max`.
 
-Ví dụ:
-- `ORD202604060001`
-- `INV202604060010`
+Business rules must be validated in service layer, for example quantity must not exceed inventory, voucher must be active and not expired, sale price must not exceed base price, order status transition must be valid, and payment callback must not be processed twice.
 
-### 11.5. Foreign key
-Phải có foreign key cho dữ liệu lõi. Không cascade delete bừa bãi.
+Use global exception handling.
 
-### 11.6. Optimistic locking
-Bảng có khả năng concurrent update cao phải có `version BIGINT`:
-- `inventories`
+Common error categories: validation error, authentication error, authorization error, not found, conflict, business rule violation, internal server error.
 
----
+Use stable business error codes such as `PRODUCT_NOT_FOUND`, `VARIANT_NOT_FOUND`, `INVENTORY_NOT_ENOUGH`, `VOUCHER_INVALID`, `ORDER_STATUS_INVALID`, `PAYMENT_FAILED`.
 
-## 12. Caching Rules
+## 7. Database and Migration Rules
+Primary database: MariaDB.
 
-### 12.1. Dùng Redis làm cache layer
-Spring Cache (`@Cacheable`, `@CacheEvict`) kết hợp Redis.
+Schema rules:
+- All schema changes must go through Flyway migration.
+- Do not edit old migrations that may already be applied.
+- Do not use `ddl-auto=create` or `ddl-auto=update` in production.
+- Money columns must use `DECIMAL(18,2)`.
+- Use foreign keys for core relational data.
+- Do not use cascade delete carelessly.
+- Add indexes for columns used in filtering, joining, sorting, and uniqueness checks.
 
-### 12.2. Những gì nên cache
-- danh sách category (ít thay đổi, đọc nhiều)
-- danh sách brand (ít thay đổi, đọc nhiều)
-- product detail (cache ngắn, evict khi update)
-- banner/homepage config
+Key strategy: internal PK may use `BIGINT` auto increment. Public/business codes should be separate, for example `ORD202604060001`.
 
-### 12.3. Những gì không nên cache
-- cart (mỗi user khác nhau, thay đổi thường xuyên)
-- order (trạng thái thay đổi liên tục)
-- inventory (số lượng thay đổi liên tục, không cache giá trị tồn kho)
+Soft delete:
+- Use soft delete for admin/config/catalog data where recovery or history matters.
+- Default list APIs should exclude deleted records unless the API explicitly supports `isDeleted` filtering.
+- Do not hard delete unless the domain explicitly requires it.
+- Do not overuse soft delete for large log/event tables.
 
-### 12.4. TTL
-Định nghĩa TTL rõ ràng cho từng cache key. Không để TTL vô hạn.
+Concurrency:
+- Use optimistic locking with `@Version` for inventory or high-concurrency aggregate data.
+- Avoid overselling by validating and updating inventory inside a safe transaction boundary.
 
-### 12.5. Evict
-Khi admin cập nhật product/category/brand phải evict cache liên quan ngay lập tức.
+## 8. Core Business Rules
+Product and variant:
+- `Product` is the parent product.
+- `ProductVariant` is the actual sellable unit.
+- SKU, size, color, price, and stock should be managed at variant level when applicable.
 
----
+Inventory:
+- Track inventory by variant.
+- Do not cache available stock as source of truth.
+- Inventory updates should be auditable through stock movement or equivalent history.
 
-## 13. Security Principles
-- JWT access token ngắn hạn
-- refresh token dài hạn
-- password hash bằng BCrypt hoặc Argon2
-- role-based access control
-- CORS cấu hình rõ theo môi trường
-- validate input nghiêm ngặt
-- hạn chế upload file nguy hiểm
-- không log thông tin nhạy cảm
-- không trả stacktrace ra ngoài API production
-- OTP lưu trong Redis với TTL, không trong DB
-- rate limit cho auth endpoint, payment endpoint
+Order:
+- `OrderItem` must store snapshot data at order time: product name, variant name, SKU, unit price, quantity, discount amount, line total.
+- Order shipping address should be stored as a snapshot, not only as a foreign key to address.
 
----
+Cart:
+- Cart item should not store final price permanently.
+- Recalculate price from current product/variant data at checkout.
 
-## 14. Environment Profiles
+Payment and promotion:
+- Use both `payments` and `payment_transactions`.
+- Payment callbacks must be idempotent.
+- Do not trust client-side payment status.
+- Separate promotion campaign, voucher code, rule, and usage history.
+- Voucher usage must be protected from double-spending.
 
-Có 2 profile chính:
-- `dev`
-- `prod`
+## 9. Authentication and Security Rules
+Auth target:
+- Access token is returned in response body.
+- Refresh token is stored only in HttpOnly cookie.
+- Refresh sessions are stored server-side in Redis with TTL.
+- Store refresh token hash, not raw refresh token.
+- Logout revokes refresh session, clears cookie, and blacklists access token when applicable.
+- Password change/reset should revoke all active refresh sessions for that user.
 
-**dev**:
-- log chi tiết hơn
-- swagger enabled
-- có thể seed data
-- có thể bật SQL log khi cần
+Security requirements:
+- Use BCrypt or Argon2 for password hashing.
+- Use short-lived access tokens.
+- Use role-based authorization.
+- Configure CORS explicitly per environment.
+- Validate all external input.
+- Never log passwords, raw JWT, refresh token, OTP, cookies, or payment secrets.
+- Do not return stacktrace in production API responses.
+- Use rate limiting for auth, OTP, and payment-sensitive endpoints where applicable.
+- Uploads must validate file type, size, and storage path.
 
-**prod**:
-- log an toàn
-- swagger có thể restricted
-- secrets lấy từ env / secret manager
-- tối ưu connection pool / cache / rate limit
+Cookie guidance: refresh token cookie should use `HttpOnly`, use `Secure` in HTTPS environments, and choose `SameSite` based on frontend/backend domain setup.
 
----
+## 10. Redis and Caching Rules
+Redis may be used for refresh sessions, access-token blacklist, OTP with TTL, rate limiting, short-lived cache, and temporary checkout/session data if needed.
 
-## 15. Logging & Audit
+Good cache candidates: categories, brands, product detail with short TTL, homepage/banner configuration.
 
-### 15.1. Logging
-Cần log đủ các nhóm:
-- request id / trace id
-- auth failures
-- payment callback
-- inventory changes
-- order status changes
-- admin critical actions
+Avoid caching cart as source of truth, order status as source of truth, and inventory available quantity as source of truth.
 
-### 15.2. Audit log
-Những hành động admin quan trọng cần audit:
-- tạo/sửa/xóa product
-- chỉnh tồn kho
-- đổi trạng thái đơn
-- tạo/sửa voucher
-- hoàn tiền
-- khóa user
+Cache rules:
+- Every cache must have a clear key naming convention.
+- Every cache must have TTL.
+- Update/delete operations must evict related cache.
+- Do not cache sensitive user data unless the security model is clear.
 
----
+## 11. Logging and Audit
+Log useful operational events: auth failures, logout/session revocation, order status changes, inventory changes, payment callbacks, admin critical actions, external integration failures.
 
-## 16. Testing Strategy
+Do not log passwords, raw JWT, refresh token, OTP, payment secrets, or full cookie headers.
 
-### 16.1. Unit test
-Ưu tiên cho:
-- service business logic
-- validator
-- promotion calculation
-- inventory check
-- order lifecycle transitions
+Admin actions that should be auditable: create/update/delete product, update inventory, change order status, create/update voucher, refund payment, lock/unlock user.
 
-### 16.2. Integration test
-Ưu tiên cho:
-- repository queries
-- API auth flow
-- create order flow
-- payment callback flow
-- apply voucher flow
+Prefer logs with request ID / trace ID when available.
 
-### 16.3. Test data
-Có thể chuẩn bị seed data cho:
-- roles
-- admin account
-- categories cơ bản
-- brands cơ bản
-- sample products
+## 12. Testing Expectations
+When implementing or changing important logic, add or update tests where practical.
 
----
+Prioritize unit tests for service business rules, validators, promotion calculation, inventory validation, and order status transitions.
 
-## 17. Branching & Commit Conventions
+Prioritize integration tests for repository queries, auth flow, order creation flow, voucher application, and payment callback idempotency.
 
-### Branch types
-- `dev`: branch chính của team
-- `feat/`: feature mới
-- `bugfix/`: sửa lỗi
-- `hotfix/`: fix gấp production
-- `release/`: phát hành
-- `refactor/`: tái cấu trúc
+For every feature, consider success path, validation error, not found, unauthorized/forbidden, conflict/business rule violation, and pagination/filtering if list API is affected.
 
-### Branch naming convention
-```
+## 13. Feature Implementation Checklist
+When implementing a feature:
+1. Read existing code and related docs first.
+2. Identify affected domain rules.
+3. Define or update entity, DTO, mapper, repository, service, controller.
+4. Add Flyway migration if schema changes are needed.
+5. Add validation and business error handling.
+6. Add authorization checks.
+7. Add pagination/filtering/sorting for list APIs.
+8. Avoid N+1 queries and inefficient loops.
+9. Add or update tests where valuable.
+10. Update API documentation/contract if endpoint behavior changes.
+11. Run or explain the expected verification command.
+
+Do not make unrelated refactors in the same change unless required.
+
+## 14. Documentation Rules
+Update documentation when changing API endpoint path/request/response/error code, auth/cookie/session behavior, database schema, business lifecycle, or frontend/backend contract.
+
+Important docs may include `README.md`, `admin-api-contract.md`, `customer-api-contract.md`, `api-common.md`, and domain-specific lifecycle docs.
+
+Keep `CLAUDE.md` concise. Put long detailed explanations into separate docs.
+
+## 15. Git Rules
+Main development branch: `dev`.
+
+Branch naming:
+
+```text
 {type}/{task_id}_{title}
 ```
 
-Ví dụ:
-- `feat/1001_product_variant_management`
-- `bugfix/1042_fix_order_total_calculation`
-- `refactor/1088_cleanup_auth_module`
+Commit format:
 
-### Commit message convention
-```
+```text
 {type}({module}): {title}
 
 {description of the change}
@@ -590,110 +281,25 @@ Ví dụ:
 {Fixes/Complete #issue_number}
 ```
 
-Ví dụ:
-```
-feat(product): add product variant creation API
+## 16. AI Working Rules
+When acting as an AI coding assistant:
+- Inspect existing code before changing code.
+- Follow current naming, package, response, and error conventions.
+- Do not change architecture without explaining why.
+- Do not add dependencies without justification.
+- Do not edit old Flyway migrations that may already be applied.
+- Do not expose entities directly in API responses.
+- Do not skip security and authorization checks.
+- Do not ignore transaction boundaries.
+- Do not hide errors with broad `catch Exception` blocks.
+- Do not create fake success responses.
+- Do not leave TODOs for required production behavior.
 
-Implement create variant flow with size/color combination validation
-Add DTO, service, repository, mapper and controller endpoint
+Before finishing a task, summarize files changed, behavior changed, tests or verification performed, and risks/follow-up work.
 
-Complete #1001
-```
+## 17. Early Phase Scope
+Prioritize MVP backend: auth, user/customer, address, category, brand, product, product variant, inventory, cart, order, admin basic APIs.
 
----
+Next phase: payment gateway, shipment, invoice, voucher/promotion, review, wishlist, notification, CMS/banner, dashboard/report.
 
-## 18. Development Priorities
-
-### Phase 1 - MVP Backend
-- auth
-- user/customer
-- address
-- category
-- brand
-- product
-- product variant
-- inventory
-- cart
-- order
-- order item
-- admin basic
-
-### Phase 2
-- payment gateway
-- shipment
-- invoice
-- voucher
-- promotion
-- review
-- wishlist
-- collection
-
-### Phase 3
-- notification
-- cms/banner
-- dashboard/report
-- loyalty
-- recommendation
-
----
-
-## 19. AI Collaboration Instructions
-
-Khi AI hỗ trợ code trong project này, cần tuân thủ:
-
-1. Không tự ý thay đổi kiến trúc chung nếu chưa có lý do rõ ràng.
-2. Không thêm dependency nặng nếu không thật sự cần.
-3. Không sửa migration cũ đã dùng ở shared environment.
-4. Luôn ưu tiên giữ tính nhất quán package, naming, response format.
-5. Khi tạo API mới phải đồng thời:
-    - tạo DTO request/response
-    - service
-    - repository nếu cần
-    - controller
-    - validation
-    - OpenAPI annotation
-6. Khi tạo entity mới phải nghĩ tới:
-    - audit fields
-    - soft delete
-    - index
-    - unique constraints
-    - foreign keys
-    - version (nếu entity có concurrent update)
-7. Khi sửa business flow quan trọng phải kiểm tra ảnh hưởng:
-    - order total
-    - inventory
-    - payment status
-    - voucher usage
-8. Không viết code "tạm chạy được"; phải ưu tiên code rõ trách nhiệm, dễ mở rộng.
-
----
-
-## 20. What AI should do when implementing a feature
-
-Khi triển khai một tính năng mới, AI nên làm theo trình tự:
-
-1. Hiểu domain và business rule
-2. Xác định module liên quan
-3. Xác định entity / DTO / API cần thêm
-4. Xác định migration cần thêm
-5. Xác định validation và error cases
-6. Xác định test cases quan trọng
-7. Implement theo từng lớp rõ ràng
-8. Review ảnh hưởng tới module khác
-9. Viết hoặc cập nhật docs nếu cần
-
----
-
-## 21. Out of Scope for Early Phase
-
-Những phần chưa ưu tiên ở giai đoạn đầu:
-- microservices
-- event sourcing
-- CQRS đầy đủ
-- real-time recommendation engine
-- complex search engine
-- multi-tenant
-- multi-currency phức tạp
-- international tax engine
-
-Có thể bổ sung sau nếu business thực sự cần.
+Avoid early overengineering: microservices, event sourcing, full CQRS, complex recommendation engine, multi-tenant architecture, complex multi-currency/tax engine.

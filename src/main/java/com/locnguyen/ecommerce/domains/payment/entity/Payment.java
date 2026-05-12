@@ -65,4 +65,10 @@ public class Payment extends BaseEntity {
     @OneToMany(mappedBy = "payment", cascade = CascadeType.ALL, orphanRemoval = false)
     @ToString.Exclude
     private List<PaymentTransaction> transactions = new ArrayList<>();
+
+    // ─── Optimistic locking ─────────────────────────────────────────────────
+
+    @Version
+    @Column(name = "version", nullable = false)
+    private Long version = 0L;
 }

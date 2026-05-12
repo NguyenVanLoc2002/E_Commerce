@@ -7,6 +7,7 @@ import com.locnguyen.ecommerce.domains.admin.dto.UpdateUserRequest;
 import com.locnguyen.ecommerce.domains.auditlog.service.AuditLogService;
 import com.locnguyen.ecommerce.domains.auth.dto.UserResponse;
 import com.locnguyen.ecommerce.domains.auth.mapper.UserMapper;
+import com.locnguyen.ecommerce.domains.admin.service.impl.AdminUserServiceImpl;
 import com.locnguyen.ecommerce.domains.user.entity.Role;
 import com.locnguyen.ecommerce.domains.user.entity.User;
 import com.locnguyen.ecommerce.domains.user.enums.RoleName;
@@ -48,7 +49,7 @@ class AdminUserServiceTest {
     @Mock UserMapper userMapper;
     @Mock AuditLogService auditLogService;
 
-    @InjectMocks AdminUserService adminUserService;
+    @InjectMocks AdminUserServiceImpl adminUserService;
 
     private static final UUID TARGET_ID = UUID.fromString("11111111-1111-1111-1111-111111111111");
     private static final UUID CALLER_ID = UUID.fromString("22222222-2222-2222-2222-222222222222");

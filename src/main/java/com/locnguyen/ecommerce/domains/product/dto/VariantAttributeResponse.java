@@ -5,6 +5,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Builder;
 import lombok.Getter;
 
+import java.io.Serializable;
 import java.util.UUID;
 
 /**
@@ -15,7 +16,8 @@ import java.util.UUID;
 @Builder
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @Schema(description = "An attribute and the value selected for a variant")
-public class VariantAttributeResponse {
+public class VariantAttributeResponse implements Serializable {
+    private static final long serialVersionUID = 1L;
 
     private final UUID attributeId;
     private final String attributeName;

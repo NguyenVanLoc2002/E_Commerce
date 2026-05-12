@@ -11,6 +11,11 @@ public class AppProperties {
 
     private Jwt jwt = new Jwt();
     private Cors cors = new Cors();
+    private Auth auth = new Auth();
+    private Security security = new Security();
+    private Otp otp = new Otp();
+    private ResetToken resetToken = new ResetToken();
+    private Idempotency idempotency = new Idempotency();
 
     @Getter
     @Setter
@@ -24,5 +29,68 @@ public class AppProperties {
     @Setter
     public static class Cors {
         private String[] allowedOrigins = {"http://localhost:3000"};
+    }
+
+    @Getter
+    @Setter
+    public static class Auth {
+        private RefreshCookie refreshCookie = new RefreshCookie();
+    }
+
+    @Getter
+    @Setter
+    public static class RefreshCookie {
+        private String name = "fashion-shop.refresh-token";
+        private String path = "/api/v1/auth";
+        private String sameSite = "Lax";
+        private boolean secure = false;
+        private boolean httpOnly = true;
+        private long maxAge = -1L;
+    }
+
+    /**
+     * Generic security toggles independent of the JWT/cookie subsystem.
+     */
+    @Getter
+    @Setter
+    public static class Security {
+        /**
+         * When {@code false} (default and recommended), the refresh-token endpoint
+         * accepts the refresh token only from the HttpOnly cookie. When {@code true},
+         * a deprecated request-body fallback remains active for backward compatibility.
+         */
+        private boolean refreshTokenBodyFallbackEnabled = false;
+
+        /**
+         * When {@code true}, the CSRF double-submit cookie validator is enforced for
+         * cookie-mutating endpoints (refresh-token / logout). Disabled by default in
+         * dev environments to avoid breaking existing clients during the rollout.
+         */
+        private boolean csrfDoubleSubmitEnabled = false;
+    }
+
+    @Getter
+    @Setter
+    public static class Otp {
+        private int expiresMinutes = 5;
+        private int maxAttempts = 5;
+        private int resendCooldownSeconds = 60;
+        private int sendLimitWindowMinutes = 15;
+        private int sendLimitMax = 5;
+    }
+
+    @Getter
+    @Setter
+    public static class ResetToken {
+        private int expiresMinutes = 10;
+    }
+
+    @Getter
+    @Setter
+    public static class Idempotency {
+        /** TTL for idempotency records. Requests older than this threshold are stale. */
+        private long ttlHours = 24L;
+        /** Processing records older than this (minutes) are treated as stale and allow retry. */
+        private long staleProcessingMinutes = 5L;
     }
 }

@@ -14,6 +14,7 @@ import com.locnguyen.ecommerce.domains.promotion.enums.RuleType;
 import com.locnguyen.ecommerce.domains.promotion.mapper.VoucherMapper;
 import com.locnguyen.ecommerce.domains.promotion.repository.VoucherRepository;
 import com.locnguyen.ecommerce.domains.promotion.repository.VoucherUsageRepository;
+import com.locnguyen.ecommerce.domains.promotion.service.impl.VoucherServiceImpl;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -53,7 +54,7 @@ class VoucherServiceTest {
     @Mock PromotionService promotionService;
     @Mock OrderRepository orderRepository;
 
-    @InjectMocks VoucherService voucherService;
+    @InjectMocks VoucherServiceImpl voucherService;
 
     // ─── time constants ──────────────────────────────────────────────────────
 

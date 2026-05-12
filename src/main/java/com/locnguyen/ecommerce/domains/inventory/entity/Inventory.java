@@ -51,4 +51,14 @@ public class Inventory extends BaseEntity {
     public int getAvailable() {
         return onHand - reserved;
     }
+
+    // ─── Optimistic locking ─────────────────────────────────────────────────
+    // Note: critical reserve/release/complete paths also hold a PESSIMISTIC_WRITE
+    // row lock via InventoryRepository.findByVariantIdAndWarehouseIdWithLock.
+    // This @Version field aligns the schema with database-guidelines.md §13 and
+    // covers any future admin-only update paths that do not use the locked query.
+
+    @Version
+    @Column(name = "version", nullable = false)
+    private Long version = 0L;
 }

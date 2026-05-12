@@ -4,6 +4,8 @@ import com.locnguyen.ecommerce.common.constants.AppConstants;
 import com.locnguyen.ecommerce.common.response.ApiResponse;
 import com.locnguyen.ecommerce.common.response.PagedResponse;
 import com.locnguyen.ecommerce.domains.product.dto.*;
+import com.locnguyen.ecommerce.domains.product.service.ProductSearchReindexService;
+import com.locnguyen.ecommerce.domains.product.service.ProductSearchReindexService.ReindexResult;
 import com.locnguyen.ecommerce.domains.product.service.ProductService;
 import com.locnguyen.ecommerce.domains.productvariant.service.ProductVariantService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -39,6 +41,7 @@ public class AdminProductController {
 
     private final ProductService productService;
     private final ProductVariantService variantService;
+    private final ProductSearchReindexService productSearchReindexService;
 
     // ─── Product CRUD ─────────────────────────────────────────────────────────
 
@@ -116,5 +119,13 @@ public class AdminProductController {
             @PathVariable UUID variantId) {
         variantService.deleteVariant(productId, variantId);
         return ApiResponse.noContent();
+    }
+
+    // ─── Search index maintenance ─────────────────────────────────────────────
+
+    @Operation(summary = "Rebuild products.search_text for FULLTEXT keyword search")
+    @PostMapping("/search/reindex")
+    public ApiResponse<ReindexResult> reindexSearchText() {
+        return ApiResponse.success(productSearchReindexService.reindexAll());
     }
 }

@@ -209,6 +209,29 @@ Quá nhiều index sẽ làm chậm:
 
 Chỉ index field thực sự cần.
 
+### 8.5. FULLTEXT index cho keyword search
+
+- Modules có nhu cầu keyword search phức tạp (ví dụ products) **không** dùng
+  `LIKE '%keyword%'` cho mặc định vì sẽ gây full table scan.
+- Thay vào đó: tạo cột denormalized dạng `TEXT NULL` (ví dụ
+  `products.search_text`) và đánh `FULLTEXT` index trên các cột text liên quan
+  (ví dụ `FULLTEXT(name, slug, search_text)`).
+- Quy ước:
+  - Cột denormalized luôn lowercase, đã strip Vietnamese accents, đã thay
+    `đ`/`Đ` thành `d`/`D` qua `SearchTextNormalizer`.
+  - Service layer phải build/refresh giá trị này khi tạo/cập nhật entity, và
+    rebuild khi các field nguồn thay đổi (name, slug, brand, categories...).
+  - Sau khi deploy migration, chạy reindex endpoint để backfill dữ liệu cũ.
+  - Cột `search_text` là **internal**, không bao giờ trả ra public API.
+- Truy vấn:
+  - `MATCH(name, slug, search_text) AGAINST (? IN BOOLEAN MODE)` — toàn bộ
+    user input phải được normalize và escape các ký tự BOOLEAN MODE
+    (`+ - > < ( ) ~ * " @`) trước khi nối thành `+term*`.
+  - Order by `MATCH(...)` DESC trước, sau đó mới đến `Pageable.sort` (chỉ
+    cho phép các cột nằm trong allow-list).
+- MariaDB là search engine duy nhất ở giai đoạn này. Không introduce
+  Elasticsearch.
+
 ---
 
 ## 9. Unique constraint guideline
@@ -330,15 +353,72 @@ Có thể dùng application set timestamp. Nếu DB set mặc định thì phả
 ### 13.1. Khi nào cần
 Các bảng có khả năng bị concurrent update cao phải dùng optimistic locking:
 - `inventories`: tránh oversell
+- `orders`: tránh lost update khi admin/system cùng cập nhật trạng thái đơn hàng
+- `payments`: tránh duplicate payment state mutation từ concurrent callbacks
+- `shipments`: tránh lost update khi admin cập nhật thông tin vận chuyển
 
 ### 13.2. Cách implement
 Thêm cột `version BIGINT NOT NULL DEFAULT 0` và dùng `@Version` của JPA.
 
 ```sql
+-- V19 (đã apply)
+ALTER TABLE orders    ADD COLUMN version BIGINT NOT NULL DEFAULT 0;
+ALTER TABLE payments  ADD COLUMN version BIGINT NOT NULL DEFAULT 0;
+ALTER TABLE shipments ADD COLUMN version BIGINT NOT NULL DEFAULT 0;
+
+-- V20 (đã apply)
 ALTER TABLE inventories ADD COLUMN version BIGINT NOT NULL DEFAULT 0;
 ```
 
-JPA tự động xử lý `OptimisticLockException` khi có conflict. Service cần catch và retry hoặc trả lỗi phù hợp.
+JPA tự động xử lý `OptimisticLockException` khi có conflict. `GlobalExceptionHandler`
+map cả `ObjectOptimisticLockingFailureException` (Spring) lẫn `OptimisticLockException`
+(JPA) thành HTTP 409 với error code `CONCURRENT_MODIFICATION`.
+
+### 13.3. Lưu ý về inventory
+`inventories` đồng thời dùng cả optimistic lock (`@Version`) lẫn pessimistic lock
+(`SELECT ... FOR UPDATE`) trong các critical path như reserve/release/complete.
+Pessimistic lock ở `InventoryRepository.findByVariantIdAndWarehouseIdWithLock` là
+tầng bảo vệ chính cho các thao tác tồn kho. `@Version` là tầng bảo vệ thứ cấp.
+
+---
+
+## 13bis. Idempotency table (Phase 3)
+
+### Table: `idempotency_keys` (V21)
+
+**Purpose:** Tracks the lifecycle of client-driven idempotent operations.
+Prevents duplicate checkout and payment-initiation effects when clients retry after network failures.
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | `BIGINT AUTO_INCREMENT PK` | Internal key |
+| `idempotency_key` | `VARCHAR(100) NOT NULL` | Client-supplied key |
+| `user_id` | `CHAR(36) NULL` | Customer UUID; NULL for system actions |
+| `action_type` | `VARCHAR(50) NOT NULL` | `CHECKOUT`, `PAYMENT_INITIATE`, etc. |
+| `request_hash` | `VARCHAR(64) NULL` | SHA-256 of stable request fields |
+| `resource_type` | `VARCHAR(50) NULL` | `ORDER`, `PAYMENT`, etc. |
+| `resource_id` | `VARCHAR(100) NULL` | UUID of created resource |
+| `response_status` | `INT NULL` | HTTP status of original response |
+| `response_body` | `LONGTEXT NULL` | Reserved for future full-replay support |
+| `status` | `VARCHAR(30) NOT NULL DEFAULT 'PROCESSING'` | `PROCESSING`, `COMPLETED`, `FAILED` |
+| `error_code` | `VARCHAR(100) NULL` | Error code when FAILED |
+| `expires_at` | `DATETIME NOT NULL` | TTL (default 24 h) |
+| `created_at` / `updated_at` | `DATETIME NOT NULL` | Audit timestamps |
+
+**Unique constraint** `(user_id, action_type, idempotency_key)` prevents duplicate processing even under concurrent inserts.
+Concurrent `DataIntegrityViolationException` is caught by the application, which reloads and evaluates the existing record.
+
+**Cleanup:** Schedule `IdempotencyKeyRepository.deleteExpired(cutoff)` to remove records past `expires_at`.
+
+### Constraint: `payment_transactions.provider_txn_id` unique (V22)
+
+```sql
+ALTER TABLE payment_transactions
+    ADD CONSTRAINT uq_pt_provider_txn_id UNIQUE (provider_txn_id);
+```
+
+Multiple NULLs are permitted (MariaDB: NULL != NULL in unique indexes).
+COD and INITIATED transactions have no `provider_txn_id`.
 
 ---
 

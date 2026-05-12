@@ -13,6 +13,9 @@ public enum AuditAction {
     LOGIN_FAILURE,
     LOGOUT,
     TOKEN_REFRESH,
+    PASSWORD_RESET_REQUESTED,
+    PASSWORD_RESET_SUCCESS,
+    PASSWORD_CHANGE_SUCCESS,
 
     // ─── User ────────────────────────────────────────────────────────────────
     USER_REGISTERED,
