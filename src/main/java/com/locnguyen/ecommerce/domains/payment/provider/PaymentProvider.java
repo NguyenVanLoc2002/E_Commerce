@@ -1,5 +1,8 @@
 package com.locnguyen.ecommerce.domains.payment.provider;
 
+import com.locnguyen.ecommerce.domains.order.entity.Order;
+import com.locnguyen.ecommerce.domains.payment.entity.Payment;
+
 /**
  * Strategy interface for payment gateway integrations.
  * Implement one bean per gateway (MoMo, ZaloPay, VNPay, etc.).
@@ -41,4 +44,15 @@ public interface PaymentProvider {
      * @return order code string
      */
     String extractOrderCode(String payload);
+
+    /**
+     * Generate the URL the customer should be redirected to for completing payment.
+     *
+     * @param payment     the payment record (contains paymentCode, amount, expiredAt)
+     * @param order       the order being paid (contains orderCode, totalAmount)
+     * @param returnUrl   URL to redirect the customer back to after payment
+     * @param callbackUrl URL the gateway calls asynchronously after payment
+     * @return payment URL string, or {@code null} if URL generation is not supported
+     */
+    String createPaymentUrl(Payment payment, Order order, String returnUrl, String callbackUrl);
 }

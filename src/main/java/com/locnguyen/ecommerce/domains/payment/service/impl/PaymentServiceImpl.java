@@ -1,5 +1,6 @@
 package com.locnguyen.ecommerce.domains.payment.service.impl;
 
+import com.locnguyen.ecommerce.common.config.AppProperties;
 import com.locnguyen.ecommerce.common.exception.AppException;
 import com.locnguyen.ecommerce.common.exception.ErrorCode;
 import com.locnguyen.ecommerce.common.response.PagedResponse;
@@ -20,6 +21,8 @@ import com.locnguyen.ecommerce.domains.payment.entity.PaymentTransaction;
 import com.locnguyen.ecommerce.domains.payment.enums.PaymentRecordStatus;
 import com.locnguyen.ecommerce.domains.payment.enums.TransactionStatus;
 import com.locnguyen.ecommerce.domains.payment.mapper.PaymentMapper;
+import com.locnguyen.ecommerce.domains.payment.provider.PaymentProvider;
+import com.locnguyen.ecommerce.domains.payment.provider.PaymentProviderRegistry;
 import com.locnguyen.ecommerce.domains.payment.repository.PaymentRepository;
 import com.locnguyen.ecommerce.domains.payment.repository.PaymentTransactionRepository;
 import com.locnguyen.ecommerce.domains.payment.service.PaymentService;
@@ -45,6 +48,8 @@ public class PaymentServiceImpl implements PaymentService {
     private final OrderRepository orderRepository;
     private final PaymentMapper paymentMapper;
     private final IdempotencyService idempotencyService;
+    private final PaymentProviderRegistry providerRegistry;
+    private final AppProperties appProperties;
 
     // ─── COD payment ────────────────────────────────────────────────────────
 
@@ -242,7 +247,32 @@ public class PaymentServiceImpl implements PaymentService {
 
         idempotencyService.markComplete(
                 idem.getId(), "PAYMENT", resultPayment.getId().toString(), 201);
-        return paymentMapper.toResponse(resultPayment);
+
+        PaymentResponse response = paymentMapper.toResponse(resultPayment);
+        String paymentUrl = resolvePaymentUrl(resultPayment, order, request.getProvider(), request.getReturnUrl());
+        if (paymentUrl != null) {
+            response = response.toBuilder().paymentUrl(paymentUrl).build();
+        }
+        return response;
+    }
+
+    private String resolvePaymentUrl(Payment payment, Order order, String providerName, String returnUrl) {
+        if (providerName == null) return null;
+        return providerRegistry.find(providerName)
+                .map(provider -> {
+                    String callbackUrl = appProperties.getPayment().getBaseCallbackUrl();
+                    String resolvedReturnUrl = (returnUrl != null && !returnUrl.isBlank())
+                            ? returnUrl
+                            : appProperties.getPayment().getDefaultReturnUrl();
+                    try {
+                        return provider.createPaymentUrl(payment, order, resolvedReturnUrl, callbackUrl);
+                    } catch (Exception e) {
+                        log.warn("Failed to create payment URL: provider={} orderCode={} — {}",
+                                providerName, order.getOrderCode(), e.getMessage());
+                        return null;
+                    }
+                })
+                .orElse(null);
     }
 
     /**

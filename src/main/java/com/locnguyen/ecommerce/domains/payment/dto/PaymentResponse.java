@@ -13,7 +13,7 @@ import java.util.List;
 
 import java.util.UUID;
 @Getter
-@Builder
+@Builder(toBuilder = true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @Schema(description = "Payment response")
 public class PaymentResponse {
@@ -26,6 +26,8 @@ public class PaymentResponse {
     private final PaymentRecordStatus status;
     private final BigDecimal amount;
     private final LocalDateTime paidAt;
+    /** Redirect URL for online payment. Null for COD and after payment is settled. */
+    private final String paymentUrl;
     private final List<TransactionResponse> transactions;
     private final LocalDateTime createdAt;
 }
