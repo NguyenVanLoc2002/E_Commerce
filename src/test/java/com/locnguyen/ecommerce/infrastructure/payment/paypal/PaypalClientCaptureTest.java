@@ -8,11 +8,14 @@ import com.locnguyen.ecommerce.infrastructure.payment.paypal.dto.PaypalWebhookVe
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 
 import java.math.BigDecimal;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -130,6 +133,30 @@ class PaypalClientCaptureTest {
             paypalClient.captureOrder("ORDER-XYZ-789");
 
             verify(uriSpec).uri(contains("/v2/checkout/orders/ORDER-XYZ-789/capture"));
+        }
+
+        @Test
+        void sendsContentTypeJson_andAcceptJson_andEmptyBody() {
+            when(responseSpec.body(PaypalCaptureOrderResponse.class)).thenReturn(emptyCaptureResponse());
+
+            paypalClient.captureOrder("PAYPAL_ORDER_001");
+
+            verify(bodySpec).contentType(MediaType.APPLICATION_JSON);
+            verify(bodySpec).header("Accept", "application/json");
+            verify(bodySpec).body(Map.of());
+        }
+
+        @Test
+        void throws_PAYMENT_FAILED_on415UnsupportedMediaType() {
+            when(responseSpec.body(PaypalCaptureOrderResponse.class))
+                    .thenThrow(HttpClientErrorException.create(
+                            HttpStatus.UNSUPPORTED_MEDIA_TYPE, "Unsupported Media Type",
+                            null, "{\"name\":\"UNSUPPORTED_MEDIA_TYPE\"}".getBytes(), null));
+
+            assertThatThrownBy(() -> paypalClient.captureOrder("PAYPAL_ORDER_001"))
+                    .isInstanceOf(AppException.class)
+                    .extracting(e -> ((AppException) e).getErrorCode())
+                    .isEqualTo(ErrorCode.PAYMENT_FAILED);
         }
     }
 

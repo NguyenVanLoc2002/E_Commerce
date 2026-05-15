@@ -348,10 +348,10 @@ public class PaymentServiceImpl implements PaymentService {
             resultPayment = payment;
         }
 
-        idempotencyService.markComplete(
-                idem.getId(), "PAYMENT", resultPayment.getId().toString(), 201);
-
         PaymentResponse response = paymentMapper.toResponse(resultPayment);
+
+        // Resolve provider URL BEFORE marking idempotency complete so that a provider
+        // failure marks the key as FAILED and allows the client to retry.
         PaymentProviderCreateResult providerResult = resolveProviderResult(
                 resultPayment, order, request.getProvider(), request.getReturnUrl());
 
@@ -373,6 +373,10 @@ public class PaymentServiceImpl implements PaymentService {
             }
             response = builder.build();
         }
+
+        idempotencyService.markComplete(
+                idem.getId(), "PAYMENT", resultPayment.getId().toString(), 201);
+
         return response;
     }
 
@@ -387,10 +391,13 @@ public class PaymentServiceImpl implements PaymentService {
                             : appProperties.getPayment().getDefaultReturnUrl();
                     try {
                         return provider.createPayment(payment, order, resolvedReturnUrl, callbackUrl);
+                    } catch (AppException e) {
+                        throw e;
                     } catch (Exception e) {
-                        log.warn("Failed to create payment with provider: provider={} orderCode={} — {}",
-                                providerName, order.getOrderCode(), e.getMessage());
-                        return null;
+                        log.error("Unexpected error creating payment with provider: provider={} orderCode={} — {}",
+                                providerName, order.getOrderCode(), e.getMessage(), e);
+                        throw new AppException(ErrorCode.PAYMENT_FAILED,
+                                "Provider " + providerName + " encountered an unexpected error");
                     }
                 })
                 .orElse(null);

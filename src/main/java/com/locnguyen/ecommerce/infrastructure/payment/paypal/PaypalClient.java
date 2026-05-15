@@ -14,6 +14,7 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 
@@ -63,6 +64,7 @@ public class PaypalClient {
                     .uri(properties.getBaseUrl() + "/v2/checkout/orders")
                     .header("Authorization", "Bearer " + token)
                     .header("Prefer", "return=representation")
+                    .header("Accept", "application/json")
                     .contentType(MediaType.APPLICATION_JSON)
                     .body(request)
                     .retrieve()
@@ -95,14 +97,18 @@ public class PaypalClient {
      */
     public PaypalCaptureOrderResponse captureOrder(String paypalOrderId) {
         String token = oAuthClient.getAccessToken();
+        String captureUrl = properties.getBaseUrl() + "/v2/checkout/orders/" + paypalOrderId + "/capture";
 
-        log.info("Calling PayPal capture-order API: paypalOrderId={}", paypalOrderId);
+        log.info("Calling PayPal capture-order API: paypalOrderId={} url={}", paypalOrderId, captureUrl);
 
         try {
             PaypalCaptureOrderResponse response = restClient.post()
-                    .uri(properties.getBaseUrl() + "/v2/checkout/orders/" + paypalOrderId + "/capture")
+                    .uri(captureUrl)
                     .header("Authorization", "Bearer " + token)
                     .header("Prefer", "return=representation")
+                    .header("Accept", "application/json")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(Map.of())
                     .retrieve()
                     .body(PaypalCaptureOrderResponse.class);
 
@@ -113,6 +119,11 @@ public class PaypalClient {
             return response;
         } catch (AppException e) {
             throw e;
+        } catch (HttpClientErrorException e) {
+            log.error("PayPal capture-order API HTTP error: paypalOrderId={} status={} body={}",
+                    paypalOrderId, e.getStatusCode(), e.getResponseBodyAsString());
+            throw new AppException(ErrorCode.PAYMENT_FAILED,
+                    "PayPal capture failed [" + e.getStatusCode() + "]: " + e.getResponseBodyAsString());
         } catch (RestClientException e) {
             log.error("PayPal capture-order API call failed: paypalOrderId={} error={}", paypalOrderId, e.getMessage());
             throw new AppException(ErrorCode.PAYMENT_FAILED,

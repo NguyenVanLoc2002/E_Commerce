@@ -90,7 +90,10 @@
       "PowerShell($body = '{\"email\":\"customer195@dev.fashionshop.local\",\"password\":\"Ln123456\"}'; try { $resp = Invoke-RestMethod -Uri \"http://localhost:8080/api/v1/auth/login\" -Method POST -ContentType \"application/json\" -Body $body; $resp | ConvertTo-Json -Depth 5 } catch [System.Net.WebException] { $stream = $_.Exception.Response.GetResponseStream\\(\\); if \\($stream\\) { [System.IO.StreamReader]::new\\($stream\\).ReadToEnd\\(\\) } else { $_.Exception.Message } })",
       "PowerShell($token = \"eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJjdXN0b21lcjE5NUBkZXYuZmFzaGlvbnNob3AubG9jYWwiLCJyb2xlcyI6WyJDVVNUT01FUiJdLCJ0eXBlIjoiYWNjZXNzIiwiaWF0IjoxNzc4NzcyMTQzLCJleHAiOjE3Nzg3NzU3NDN9.aVRCrke9a-4dsDWsEGQXQBnbYLxx6hMtos25tWV16Nclrt3yw387etNeLuYohFRH3pm8Dq6Axj5s12yVvokUiQ\"; $headers = @{ Authorization = \"Bearer $token\" }; $resp = Invoke-RestMethod -Uri \"http://localhost:8080/api/v1/orders?page=0&size=10\" -Headers $headers; $resp.data.content | Select-Object id, orderCode, status, paymentStatus, totalAmount | ConvertTo-Json)",
       "WebFetch(domain:developers.momo.vn)",
-      "Skill(implement-feature)"
+      "Skill(implement-feature)",
+      "PowerShell($env:APP_PAYMENT_PAYPAL_ENABLED)",
+      "PowerShell($env:APP_PAYMENT_PAYPAL_CLIENT_ID)",
+      "PowerShell($env:APP_PAYMENT_PAYPAL_TEST_CONVERSION_ENABLED)"
     ]
   }
 }
