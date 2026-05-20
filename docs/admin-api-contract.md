@@ -1047,6 +1047,49 @@ Carrier catalog and per-store carrier configuration used by shipment creation.
   - `method`, `provider`, `providerTxnId`
   - `referenceType`, `referenceId`, `note`
   - `createdAt`
+- `MomoPaymentConfigRequest`
+  - partial update request for MoMo integration settings
+  - `enabled`: optional boolean
+  - `environment`: optional string
+  - `partnerCode`, `accessKey`, `secretKey`: optional plain-text inputs
+    - sending a non-null value replaces the stored secret
+    - sending blank text clears the stored secret in DB
+    - these fields are write-only and are never returned by the API
+  - `createUrl`, `redirectUrl`, `ipnUrl`, `requestType`, `lang`: optional strings
+  - `connectTimeoutMs`, `readTimeoutMs`: optional integers, must be `> 0` when provided
+- `MomoPaymentConfigResponse`
+  - `provider`
+  - `managedInDatabase`: `true` when a `payment_configs` row exists for `MOMO`
+  - `enabled`, `environment`
+  - `hasPartnerCode`, `hasAccessKey`, `hasSecretKey`
+    - indicate whether an effective secret exists either in DB or env fallback
+    - raw secret values are never returned
+  - `createUrl`, `redirectUrl`, `ipnUrl`, `requestType`, `lang`
+  - `connectTimeoutMs`, `readTimeoutMs`
+- `PaypalPaymentConfigRequest`
+  - partial update request for PayPal integration settings
+  - `enabled`: optional boolean
+  - `environment`: optional string
+  - `clientId`, `clientSecret`: optional plain-text inputs
+    - sending a non-null value replaces the stored secret
+    - sending blank text clears the stored secret in DB
+    - these fields are write-only and are never returned by the API
+  - `baseUrl`, `returnUrl`, `cancelUrl`, `webhookId`, `currency`: optional strings
+  - `brandName`, `locale`, `userAction`, `paymentMethodPreference`, `shippingPreference`: optional strings
+  - `testConversionEnabled`: optional boolean
+  - `testConversionRateVndToUsd`: optional decimal, must be `> 0` when provided
+  - `connectTimeoutMs`, `readTimeoutMs`: optional integers, must be `> 0` when provided
+- `PaypalPaymentConfigResponse`
+  - `provider`
+  - `managedInDatabase`: `true` when a `payment_configs` row exists for `PAYPAL`
+  - `enabled`, `environment`
+  - `hasClientId`, `hasClientSecret`
+    - indicate whether an effective secret exists either in DB or env fallback
+    - raw secret values are never returned
+  - `baseUrl`, `returnUrl`, `cancelUrl`, `webhookId`, `currency`
+  - `brandName`, `locale`, `userAction`, `paymentMethodPreference`, `shippingPreference`
+  - `testConversionEnabled`, `testConversionRateVndToUsd`
+  - `connectTimeoutMs`, `readTimeoutMs`
 
 ### GET `/api/v1/admin/payments`
 
@@ -1096,6 +1139,64 @@ Carrier catalog and per-store carrier configuration used by shipment creation.
 - Description: list transaction trail for a payment
 - Response:
   - `ApiResponse<List<TransactionResponse>>`
+
+### GET `/api/v1/admin/payments/integration/momo`
+
+- Access: `STAFF`, `ADMIN`, `SUPER_ADMIN`
+- Description: get the effective MoMo integration configuration used at runtime
+- Runtime behavior:
+  - provider runtime resolves config from DB first
+  - when DB config or a field inside it is missing, the backend falls back to `app.payment.momo.*`
+  - secrets are never returned; UI must rely on `has*` flags
+- Response:
+  - `ApiResponse<MomoPaymentConfigResponse>`
+
+### PUT `/api/v1/admin/payments/integration/momo`
+
+- Access: `STAFF`, `ADMIN`, `SUPER_ADMIN`
+- Description: create or update MoMo integration configuration stored in `payment_configs`
+- Request body:
+  - `MomoPaymentConfigRequest`
+- Validation/runtime notes:
+  - partial update only; omitted fields are left unchanged
+  - when `enabled=true`, the backend validates that the effective config is complete after merge with env fallback
+  - invalid/blank required effective config yields:
+    - `PAYMENT_CONFIG_MISSING` (409/business error path)
+  - disabled provider can still be saved with incomplete data
+- Response:
+  - `ApiResponse<MomoPaymentConfigResponse>`
+
+### GET `/api/v1/admin/payments/integration/paypal`
+
+- Access: `STAFF`, `ADMIN`, `SUPER_ADMIN`
+- Description: get the effective PayPal integration configuration used at runtime
+- Runtime behavior:
+  - provider runtime resolves config from DB first
+  - when DB config or a field inside it is missing, the backend falls back to `app.payment.paypal.*`
+  - secrets are never returned; UI must rely on `has*` flags
+- Response:
+  - `ApiResponse<PaypalPaymentConfigResponse>`
+
+### PUT `/api/v1/admin/payments/integration/paypal`
+
+- Access: `STAFF`, `ADMIN`, `SUPER_ADMIN`
+- Description: create or update PayPal integration configuration stored in `payment_configs`
+- Request body:
+  - `PaypalPaymentConfigRequest`
+- Validation/runtime notes:
+  - partial update only; omitted fields are left unchanged
+  - when `enabled=true`, the backend validates that the effective config is complete after merge with env fallback
+  - invalid/blank required effective config yields:
+    - `PAYMENT_CONFIG_MISSING` (409/business error path)
+  - disabled provider can still be saved with incomplete data
+- Response:
+  - `ApiResponse<PaypalPaymentConfigResponse>`
+- UI note:
+  - `testConversionEnabled` and `testConversionRateVndToUsd` are sandbox/testing aids for VND-to-USD conversion and should be presented as advanced settings
+
+- Customer-flow compatibility note:
+  - these endpoints change only the admin configuration surface and the runtime config source
+  - customer checkout, payment initiation, redirect, callback, webhook, and capture flows are unchanged at the API-contract level
 
 ---
 
@@ -1232,6 +1333,10 @@ Carrier catalog and per-store carrier configuration used by shipment creation.
 - Shipment create flow uses:
   - `POST /v3/accounts/token`
   - `POST /v3/orders`
+- AhaMove token auth request body must use provider field names:
+  - `mobile`
+  - `api_key`
+- Do not send `apiKey` to AhaMove auth; `apiKey` is only the internal admin API field name used by this backend when saving carrier secrets.
 - Shipment tracking sync uses:
   - `GET /v3/orders/{order_id}`
   - `GET /v3/orders/{order_id}/shared-link`

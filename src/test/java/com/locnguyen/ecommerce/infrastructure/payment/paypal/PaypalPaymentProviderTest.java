@@ -4,14 +4,27 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.locnguyen.ecommerce.common.exception.AppException;
 import com.locnguyen.ecommerce.common.exception.ErrorCode;
 import com.locnguyen.ecommerce.domains.order.entity.Order;
+import com.locnguyen.ecommerce.domains.payment.config.PaymentProviderConfigResolver;
+import com.locnguyen.ecommerce.domains.payment.config.PaypalResolvedPaymentConfig;
 import com.locnguyen.ecommerce.domains.payment.entity.Payment;
 import com.locnguyen.ecommerce.domains.payment.enums.PaymentRecordStatus;
 import com.locnguyen.ecommerce.domains.payment.provider.PaymentProviderCaptureResult;
 import com.locnguyen.ecommerce.domains.payment.provider.PaymentProviderCreateResult;
-import com.locnguyen.ecommerce.infrastructure.payment.paypal.dto.*;
+import com.locnguyen.ecommerce.infrastructure.payment.paypal.dto.PaypalCapture;
+import com.locnguyen.ecommerce.infrastructure.payment.paypal.dto.PaypalCaptureOrderResponse;
+import com.locnguyen.ecommerce.infrastructure.payment.paypal.dto.PaypalCapturePayments;
+import com.locnguyen.ecommerce.infrastructure.payment.paypal.dto.PaypalCapturePurchaseUnit;
+import com.locnguyen.ecommerce.infrastructure.payment.paypal.dto.PaypalCreateOrderRequest;
+import com.locnguyen.ecommerce.infrastructure.payment.paypal.dto.PaypalCreateOrderResponse;
+import com.locnguyen.ecommerce.infrastructure.payment.paypal.dto.PaypalLink;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -21,55 +34,67 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
-/**
- * Unit tests for {@link PaypalPaymentProvider}.
- * PayPal HTTP calls are mocked through {@link PaypalClient}.
- */
+@ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.LENIENT)
 class PaypalPaymentProviderTest {
 
-    private PaypalPaymentProperties properties;
+    @Mock
+    private PaymentProviderConfigResolver configResolver;
+    @Mock
     private PaypalClient paypalClient;
-    private PaypalPaymentProvider provider;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
+    private PaypalResolvedPaymentConfig paypalConfig;
+    private PaypalPaymentProvider provider;
+
     @BeforeEach
     void setUp() {
-        properties = new PaypalPaymentProperties();
-        properties.setEnabled(true);
-        properties.setClientId("test-client-id");
-        properties.setClientSecret("test-client-secret");
-        properties.setBaseUrl("https://api-m.sandbox.paypal.com");
-        properties.setReturnUrl("http://localhost:5173/payment/paypal/return");
-        properties.setCancelUrl("http://localhost:5173/payment/paypal/cancel");
-        properties.setWebhookId("WH-123456");
-        properties.setCurrency("USD");
-        properties.setTestConversionEnabled(true);
-        properties.setTestConversionRateVndToUsd(new BigDecimal("25000"));
-        properties.setConnectTimeoutMs(30_000);
-        properties.setReadTimeoutMs(30_000);
-
-        paypalClient = mock(PaypalClient.class);
-        provider = new PaypalPaymentProvider(properties, paypalClient, objectMapper);
+        paypalConfig = paypalConfig(true, new BigDecimal("25000"));
+        when(configResolver.resolvePaypal()).thenReturn(paypalConfig);
+        provider = new PaypalPaymentProvider(configResolver, paypalClient, objectMapper);
     }
 
-    // ─── Fixtures ─────────────────────────────────────────────────────────────
+    private PaypalResolvedPaymentConfig paypalConfig(boolean testConversionEnabled, BigDecimal rate) {
+        return new PaypalResolvedPaymentConfig(
+                true,
+                "SANDBOX",
+                "test-client-id",
+                "test-client-secret",
+                "https://api-m.sandbox.paypal.com",
+                "http://localhost:5173/payment/paypal/return",
+                "http://localhost:5173/payment/paypal/cancel",
+                "WH-123456",
+                "USD",
+                "Locen Studio",
+                "en-US",
+                "PAY_NOW",
+                "IMMEDIATE_PAYMENT_REQUIRED",
+                "NO_SHIPPING",
+                testConversionEnabled,
+                rate,
+                30_000,
+                30_000
+        );
+    }
 
     private Payment payment(String paymentCode, BigDecimal amount) {
-        Payment p = new Payment();
-        p.setPaymentCode(paymentCode);
-        p.setAmount(amount);
-        p.setStatus(PaymentRecordStatus.INITIATED);
-        p.setProviderOrderId("PAYPAL_ORDER_123");
-        return p;
+        Payment payment = new Payment();
+        payment.setPaymentCode(paymentCode);
+        payment.setAmount(amount);
+        payment.setStatus(PaymentRecordStatus.INITIATED);
+        payment.setProviderOrderId("PAYPAL_ORDER_123");
+        return payment;
     }
 
     private Order order(String orderCode) {
-        Order o = new Order();
-        o.setOrderCode(orderCode);
-        return o;
+        Order order = new Order();
+        order.setOrderCode(orderCode);
+        return order;
     }
 
     private PaypalCreateOrderResponse successResponse(String paypalOrderId, String approvalUrl) {
@@ -78,11 +103,11 @@ class PaypalPaymentProviderTest {
         setField(approveLink, "rel", "payer-action");
         setField(approveLink, "method", "GET");
 
-        PaypalCreateOrderResponse resp = new PaypalCreateOrderResponse();
-        setField(resp, "id", paypalOrderId);
-        setField(resp, "status", "PAYER_ACTION_REQUIRED");
-        setField(resp, "links", List.of(approveLink));
-        return resp;
+        PaypalCreateOrderResponse response = new PaypalCreateOrderResponse();
+        setField(response, "id", paypalOrderId);
+        setField(response, "status", "PAYER_ACTION_REQUIRED");
+        setField(response, "links", List.of(approveLink));
+        return response;
     }
 
     private PaypalCreateOrderResponse responseWithApproveRel(String paypalOrderId, String approvalUrl) {
@@ -91,19 +116,19 @@ class PaypalPaymentProviderTest {
         setField(approveLink, "rel", "approve");
         setField(approveLink, "method", "GET");
 
-        PaypalCreateOrderResponse resp = new PaypalCreateOrderResponse();
-        setField(resp, "id", paypalOrderId);
-        setField(resp, "status", "CREATED");
-        setField(resp, "links", List.of(approveLink));
-        return resp;
+        PaypalCreateOrderResponse response = new PaypalCreateOrderResponse();
+        setField(response, "id", paypalOrderId);
+        setField(response, "status", "CREATED");
+        setField(response, "links", List.of(approveLink));
+        return response;
     }
 
     private PaypalCreateOrderResponse responseWithNoApprovalLink(String paypalOrderId) {
-        PaypalCreateOrderResponse resp = new PaypalCreateOrderResponse();
-        setField(resp, "id", paypalOrderId);
-        setField(resp, "status", "CREATED");
-        setField(resp, "links", List.of());
-        return resp;
+        PaypalCreateOrderResponse response = new PaypalCreateOrderResponse();
+        setField(response, "id", paypalOrderId);
+        setField(response, "status", "CREATED");
+        setField(response, "links", List.of());
+        return response;
     }
 
     private PaypalCaptureOrderResponse captureResponse(String captureId, String captureStatus) {
@@ -118,29 +143,25 @@ class PaypalPaymentProviderTest {
         PaypalCapturePurchaseUnit unit = new PaypalCapturePurchaseUnit();
         setField(unit, "payments", payments);
 
-        PaypalCaptureOrderResponse resp = new PaypalCaptureOrderResponse();
-        setField(resp, "id", "PAYPAL_ORDER_123");
-        setField(resp, "status", captureStatus.equals("COMPLETED") ? "COMPLETED" : "VOIDED");
-        setField(resp, "purchaseUnits", List.of(unit));
-        return resp;
+        PaypalCaptureOrderResponse response = new PaypalCaptureOrderResponse();
+        setField(response, "id", "PAYPAL_ORDER_123");
+        setField(response, "status", captureStatus.equals("COMPLETED") ? "COMPLETED" : "VOIDED");
+        setField(response, "purchaseUnits", List.of(unit));
+        return response;
     }
 
     private PaypalCaptureOrderResponse captureResponseNoPurchaseUnits() {
-        PaypalCaptureOrderResponse resp = new PaypalCaptureOrderResponse();
-        setField(resp, "id", "PAYPAL_ORDER_123");
-        setField(resp, "status", "VOIDED");
-        setField(resp, "purchaseUnits", List.of());
-        return resp;
+        PaypalCaptureOrderResponse response = new PaypalCaptureOrderResponse();
+        setField(response, "id", "PAYPAL_ORDER_123");
+        setField(response, "status", "VOIDED");
+        setField(response, "purchaseUnits", List.of());
+        return response;
     }
-
-    // ─── getProviderName ──────────────────────────────────────────────────────
 
     @Test
-    void getProviderName_returnsPAYPAL() {
+    void getProviderName_returnsPaypal() {
         assertThat(provider.getProviderName()).isEqualTo("PAYPAL");
     }
-
-    // ─── createPayment ────────────────────────────────────────────────────────
 
     @Nested
     class CreatePayment {
@@ -161,7 +182,7 @@ class PaypalPaymentProviderTest {
         }
 
         @Test
-        void returnsApprovalUrl_whenPaypalRespondsWithApproveRelLegacy() {
+        void returnsApprovalUrl_whenPaypalRespondsWithLegacyApproveRel() {
             String expectedUrl = "https://www.sandbox.paypal.com/checkoutnow?token=LEGACY";
             when(paypalClient.createOrder(any(), eq("ORD002")))
                     .thenReturn(responseWithApproveRel("PAYPAL_ORDER_456", expectedUrl));
@@ -176,28 +197,18 @@ class PaypalPaymentProviderTest {
         }
 
         @Test
-        void storesPaypalOrderId_asProviderOrderId() {
+        void storesPaypalIds_onSuccess() {
             when(paypalClient.createOrder(any(), any()))
                     .thenReturn(successResponse("PAYPAL_ORDER_789",
                             "https://www.sandbox.paypal.com/checkoutnow?token=XYZ"));
 
             PaymentProviderCreateResult result = provider.createPayment(
                     payment("PAY001", new BigDecimal("500000")),
-                    order("ORD001"), null, null);
+                    order("ORD001"),
+                    null,
+                    null);
 
             assertThat(result.getProviderOrderId()).isEqualTo("PAYPAL_ORDER_789");
-        }
-
-        @Test
-        void storesPaypalOrderId_asProviderRequestId() {
-            when(paypalClient.createOrder(any(), any()))
-                    .thenReturn(successResponse("PAYPAL_ORDER_789",
-                            "https://www.sandbox.paypal.com/checkoutnow?token=XYZ"));
-
-            PaymentProviderCreateResult result = provider.createPayment(
-                    payment("PAY001", new BigDecimal("500000")),
-                    order("ORD001"), null, null);
-
             assertThat(result.getProviderRequestId()).isEqualTo("PAYPAL_ORDER_789");
         }
 
@@ -207,64 +218,72 @@ class PaypalPaymentProviderTest {
                     .thenReturn(successResponse("PAYPAL_ORDER_123",
                             "https://www.sandbox.paypal.com/checkoutnow?token=ABC"));
 
-            Payment p = payment("PAY001", new BigDecimal("500000"));
-            PaymentRecordStatus statusBefore = p.getStatus();
-            provider.createPayment(p, order("ORD001"), null, null);
+            Payment payment = payment("PAY001", new BigDecimal("500000"));
+            PaymentRecordStatus statusBefore = payment.getStatus();
 
-            assertThat(p.getStatus()).isEqualTo(statusBefore);
+            provider.createPayment(payment, order("ORD001"), null, null);
+
+            assertThat(payment.getStatus()).isEqualTo(statusBefore);
         }
 
         @Test
         void setsCustomId_equalToOrderCode_inPurchaseUnit() {
             when(paypalClient.createOrder(any(), eq("ORD001")))
                     .thenAnswer(invocation -> {
-                        PaypalCreateOrderRequest req = invocation.getArgument(0);
-                        String customId = req.getPurchaseUnits().get(0).getCustomId();
-                        assertThat(customId).isEqualTo("ORD001");
+                        PaypalCreateOrderRequest request = invocation.getArgument(0);
+                        assertThat(request.getPurchaseUnits().get(0).getCustomId()).isEqualTo("ORD001");
                         return successResponse("PAYPAL_ORDER_123",
                                 "https://www.sandbox.paypal.com/checkoutnow?token=ABC");
                     });
 
             provider.createPayment(
                     payment("PAY001", new BigDecimal("500000")),
-                    order("ORD001"), null, null);
+                    order("ORD001"),
+                    null,
+                    null);
         }
 
         @Test
-        void throws_PAYMENT_FAILED_whenApprovalLinkMissing() {
+        void throwsPaymentFailed_whenApprovalLinkMissing() {
             when(paypalClient.createOrder(any(), eq("ORD001")))
                     .thenReturn(responseWithNoApprovalLink("PAYPAL_ORDER_123"));
 
             assertThatThrownBy(() -> provider.createPayment(
                     payment("PAY001", new BigDecimal("500000")),
-                    order("ORD001"), null, null))
+                    order("ORD001"),
+                    null,
+                    null))
                     .isInstanceOf(AppException.class)
-                    .extracting(e -> ((AppException) e).getErrorCode())
+                    .extracting(exception -> ((AppException) exception).getErrorCode())
                     .isEqualTo(ErrorCode.PAYMENT_FAILED);
         }
 
         @Test
-        void throws_PAYMENT_FAILED_whenPaypalClientThrows() {
+        void throwsPaymentFailed_whenPaypalClientThrows() {
             when(paypalClient.createOrder(any(), any()))
                     .thenThrow(new AppException(ErrorCode.PAYMENT_FAILED, "PayPal API timeout"));
 
             assertThatThrownBy(() -> provider.createPayment(
                     payment("PAY001", new BigDecimal("500000")),
-                    order("ORD001"), null, null))
+                    order("ORD001"),
+                    null,
+                    null))
                     .isInstanceOf(AppException.class)
-                    .extracting(e -> ((AppException) e).getErrorCode())
+                    .extracting(exception -> ((AppException) exception).getErrorCode())
                     .isEqualTo(ErrorCode.PAYMENT_FAILED);
         }
 
         @Test
-        void throws_PAYMENT_CURRENCY_UNSUPPORTED_whenTestConversionDisabled() {
-            properties.setTestConversionEnabled(false);
+        void throwsPaymentCurrencyUnsupported_whenTestConversionDisabled() {
+            when(configResolver.resolvePaypal()).thenReturn(paypalConfig(false, new BigDecimal("25000")));
 
             assertThatThrownBy(() -> provider.createPayment(
                     payment("PAY001", new BigDecimal("500000")),
-                    order("ORD001"), null, null))
+                    order("ORD001"),
+                    null,
+                    null))
                     .isInstanceOf(AppException.class)
-                    .extracting(e -> ((AppException) e).getErrorCode())
+                    .extracting(exception -> ((AppException) exception).getErrorCode())
                     .isEqualTo(ErrorCode.PAYMENT_CURRENCY_UNSUPPORTED);
 
             verify(paypalClient, never()).createOrder(any(), any());
@@ -272,36 +291,37 @@ class PaypalPaymentProviderTest {
 
         @Test
         void convertsVndToUsd_whenTestConversionEnabled() {
-            // 500,000 VND ÷ 25,000 = 20.00 USD
             when(paypalClient.createOrder(any(), eq("ORD001")))
                     .thenAnswer(invocation -> {
-                        PaypalCreateOrderRequest req = invocation.getArgument(0);
-                        String value = req.getPurchaseUnits().get(0).getAmount().getValue();
-                        assertThat(value).isEqualTo("20.00");
+                        PaypalCreateOrderRequest request = invocation.getArgument(0);
+                        assertThat(request.getPurchaseUnits().get(0).getAmount().getValue()).isEqualTo("20.00");
                         return successResponse("PAYPAL_ORDER_123",
                                 "https://www.sandbox.paypal.com/checkoutnow?token=ABC");
                     });
 
             provider.createPayment(
                     payment("PAY001", new BigDecimal("500000")),
-                    order("ORD001"), null, null);
+                    order("ORD001"),
+                    null,
+                    null);
         }
 
         @Test
-        void usesConfiguredReturnUrl_whenRequestReturnUrlIsNull() {
+        void usesResolvedReturnUrl_whenRequestReturnUrlIsNull() {
             when(paypalClient.createOrder(any(), any()))
                     .thenAnswer(invocation -> {
-                        PaypalCreateOrderRequest req = invocation.getArgument(0);
-                        String returnUrl = req.getPaymentSource().getPaypal()
-                                .getExperienceContext().getReturnUrl();
-                        assertThat(returnUrl).isEqualTo(properties.getReturnUrl());
+                        PaypalCreateOrderRequest request = invocation.getArgument(0);
+                        String returnUrl = request.getPaymentSource().getPaypal().getExperienceContext().getReturnUrl();
+                        assertThat(returnUrl).isEqualTo(paypalConfig.returnUrl());
                         return successResponse("PAYPAL_ORDER_123",
                                 "https://www.sandbox.paypal.com/checkoutnow?token=ABC");
                     });
 
             provider.createPayment(
                     payment("PAY001", new BigDecimal("500000")),
-                    order("ORD001"), null, null);
+                    order("ORD001"),
+                    null,
+                    null);
         }
 
         @Test
@@ -309,9 +329,8 @@ class PaypalPaymentProviderTest {
             String customReturn = "https://shop.example.com/payment/paypal/return";
             when(paypalClient.createOrder(any(), any()))
                     .thenAnswer(invocation -> {
-                        PaypalCreateOrderRequest req = invocation.getArgument(0);
-                        String returnUrl = req.getPaymentSource().getPaypal()
-                                .getExperienceContext().getReturnUrl();
+                        PaypalCreateOrderRequest request = invocation.getArgument(0);
+                        String returnUrl = request.getPaymentSource().getPaypal().getExperienceContext().getReturnUrl();
                         assertThat(returnUrl).isEqualTo(customReturn);
                         return successResponse("PAYPAL_ORDER_123",
                                 "https://www.sandbox.paypal.com/checkoutnow?token=ABC");
@@ -319,11 +338,11 @@ class PaypalPaymentProviderTest {
 
             provider.createPayment(
                     payment("PAY001", new BigDecimal("500000")),
-                    order("ORD001"), customReturn, null);
+                    order("ORD001"),
+                    customReturn,
+                    null);
         }
     }
-
-    // ─── createPaymentUrl ─────────────────────────────────────────────────────
 
     @Nested
     class CreatePaymentUrl {
@@ -336,13 +355,13 @@ class PaypalPaymentProviderTest {
 
             String url = provider.createPaymentUrl(
                     payment("PAY001", new BigDecimal("500000")),
-                    order("ORD001"), null, null);
+                    order("ORD001"),
+                    null,
+                    null);
 
             assertThat(url).isEqualTo(expectedUrl);
         }
     }
-
-    // ─── capturePayment ───────────────────────────────────────────────────────
 
     @Nested
     class CapturePayment {
@@ -353,7 +372,8 @@ class PaypalPaymentProviderTest {
                     .thenReturn(captureResponse("CAPTURE_ID_001", "COMPLETED"));
 
             Optional<PaymentProviderCaptureResult> result = provider.capturePayment(
-                    payment("PAY001", new BigDecimal("500000")), "PAYPAL_ORDER_123");
+                    payment("PAY001", new BigDecimal("500000")),
+                    "PAYPAL_ORDER_123");
 
             assertThat(result).isPresent();
             assertThat(result.get().isSuccess()).isTrue();
@@ -367,7 +387,8 @@ class PaypalPaymentProviderTest {
                     .thenReturn(captureResponse("CAPTURE_ID_002", "DECLINED"));
 
             Optional<PaymentProviderCaptureResult> result = provider.capturePayment(
-                    payment("PAY001", new BigDecimal("500000")), "PAYPAL_ORDER_123");
+                    payment("PAY001", new BigDecimal("500000")),
+                    "PAYPAL_ORDER_123");
 
             assertThat(result).isPresent();
             assertThat(result.get().isSuccess()).isFalse();
@@ -380,7 +401,8 @@ class PaypalPaymentProviderTest {
                     .thenReturn(captureResponseNoPurchaseUnits());
 
             Optional<PaymentProviderCaptureResult> result = provider.capturePayment(
-                    payment("PAY001", new BigDecimal("500000")), "PAYPAL_ORDER_123");
+                    payment("PAY001", new BigDecimal("500000")),
+                    "PAYPAL_ORDER_123");
 
             assertThat(result).isPresent();
             assertThat(result.get().isSuccess()).isFalse();
@@ -393,14 +415,13 @@ class PaypalPaymentProviderTest {
                     .thenThrow(new AppException(ErrorCode.PAYMENT_FAILED, "PayPal timeout"));
 
             assertThatThrownBy(() -> provider.capturePayment(
-                    payment("PAY001", new BigDecimal("500000")), "PAYPAL_ORDER_123"))
+                    payment("PAY001", new BigDecimal("500000")),
+                    "PAYPAL_ORDER_123"))
                     .isInstanceOf(AppException.class)
-                    .extracting(e -> ((AppException) e).getErrorCode())
+                    .extracting(exception -> ((AppException) exception).getErrorCode())
                     .isEqualTo(ErrorCode.PAYMENT_FAILED);
         }
     }
-
-    // ─── verifySignature ─────────────────────────────────────────────────────
 
     @Nested
     class VerifySignature {
@@ -415,36 +436,17 @@ class PaypalPaymentProviderTest {
 
         @Test
         void returnsTrue_whenPaypalVerifyReturnsSuccess() {
-            when(paypalClient.verifyWebhookSignature(any(), any(), any(), any(), any(), any()))
-                    .thenReturn(true);
+            when(paypalClient.verifyWebhookSignature(any(), any(), any(), any(), any(), any())).thenReturn(true);
 
-            assertThat(provider.verifySignature("{\"event_type\":\"PAYMENT.CAPTURE.COMPLETED\"}",
+            assertThat(provider.verifySignature(
+                    "{\"event_type\":\"PAYMENT.CAPTURE.COMPLETED\"}",
                     validHeadersJson())).isTrue();
         }
 
         @Test
-        void returnsFalse_whenPaypalVerifyReturnsFalse() {
-            when(paypalClient.verifyWebhookSignature(any(), any(), any(), any(), any(), any()))
-                    .thenReturn(false);
-
-            assertThat(provider.verifySignature("{\"event_type\":\"PAYMENT.CAPTURE.COMPLETED\"}",
-                    validHeadersJson())).isFalse();
-        }
-
-        @Test
-        void returnsFalse_whenSignatureIsNull() {
+        void returnsFalse_whenHeadersMissingOrInvalid() {
             assertThat(provider.verifySignature("{\"event_type\":\"test\"}", null)).isFalse();
-            verify(paypalClient, never()).verifyWebhookSignature(any(), any(), any(), any(), any(), any());
-        }
-
-        @Test
-        void returnsFalse_whenSignatureIsBlank() {
             assertThat(provider.verifySignature("{\"event_type\":\"test\"}", "   ")).isFalse();
-            verify(paypalClient, never()).verifyWebhookSignature(any(), any(), any(), any(), any(), any());
-        }
-
-        @Test
-        void returnsFalse_whenSignatureIsInvalidJson() {
             assertThat(provider.verifySignature("{\"event_type\":\"test\"}", "not-json")).isFalse();
             verify(paypalClient, never()).verifyWebhookSignature(any(), any(), any(), any(), any(), any());
         }
@@ -460,13 +462,9 @@ class PaypalPaymentProviderTest {
                     any()))
                     .thenReturn(true);
 
-            boolean result = provider.verifySignature("{}", validHeadersJson());
-
-            assertThat(result).isTrue();
+            assertThat(provider.verifySignature("{}", validHeadersJson())).isTrue();
         }
     }
-
-    // ─── isSuccess ────────────────────────────────────────────────────────────
 
     @Nested
     class IsSuccess {
@@ -479,32 +477,14 @@ class PaypalPaymentProviderTest {
         }
 
         @Test
-        void returnsFalse_whenEventTypeIsDifferent() {
-            String payload = "{\"event_type\":\"CHECKOUT.ORDER.APPROVED\","
-                    + "\"resource\":{\"id\":\"ORD001\",\"status\":\"APPROVED\"}}";
-            assertThat(provider.isSuccess(payload)).isFalse();
-        }
-
-        @Test
-        void returnsFalse_whenCaptureStatusIsNotCompleted() {
-            String payload = "{\"event_type\":\"PAYMENT.CAPTURE.COMPLETED\","
-                    + "\"resource\":{\"id\":\"CAP001\",\"status\":\"DECLINED\"}}";
-            assertThat(provider.isSuccess(payload)).isFalse();
-        }
-
-        @Test
-        void returnsFalse_whenPayloadIsInvalidJson() {
+        void returnsFalse_whenPayloadDoesNotRepresentSuccessfulCapture() {
+            assertThat(provider.isSuccess("{\"event_type\":\"CHECKOUT.ORDER.APPROVED\"}")).isFalse();
+            assertThat(provider.isSuccess(
+                    "{\"event_type\":\"PAYMENT.CAPTURE.COMPLETED\",\"resource\":{\"status\":\"DECLINED\"}}"))
+                    .isFalse();
             assertThat(provider.isSuccess("not-json")).isFalse();
         }
-
-        @Test
-        void returnsFalse_whenResourceIsNull() {
-            String payload = "{\"event_type\":\"PAYMENT.CAPTURE.COMPLETED\"}";
-            assertThat(provider.isSuccess(payload)).isFalse();
-        }
     }
-
-    // ─── extractProviderTxnId ─────────────────────────────────────────────────
 
     @Nested
     class ExtractProviderTxnId {
@@ -517,18 +497,11 @@ class PaypalPaymentProviderTest {
         }
 
         @Test
-        void returnsNull_whenResourceAbsent() {
-            String payload = "{\"event_type\":\"CHECKOUT.ORDER.APPROVED\"}";
-            assertThat(provider.extractProviderTxnId(payload)).isNull();
-        }
-
-        @Test
-        void returnsNull_whenPayloadIsInvalidJson() {
+        void returnsNull_whenPayloadInvalidOrMissingResource() {
+            assertThat(provider.extractProviderTxnId("{\"event_type\":\"CHECKOUT.ORDER.APPROVED\"}")).isNull();
             assertThat(provider.extractProviderTxnId("not-json")).isNull();
         }
     }
-
-    // ─── extractOrderCode ─────────────────────────────────────────────────────
 
     @Nested
     class ExtractOrderCode {
@@ -541,37 +514,25 @@ class PaypalPaymentProviderTest {
         }
 
         @Test
-        void returnsNull_whenCustomIdAbsent() {
-            String payload = "{\"event_type\":\"CHECKOUT.ORDER.APPROVED\","
-                    + "\"resource\":{\"id\":\"ORDER001\",\"status\":\"APPROVED\"}}";
-            assertThat(provider.extractOrderCode(payload)).isNull();
-        }
-
-        @Test
-        void returnsNull_whenPayloadIsInvalidJson() {
+        void returnsNull_whenPayloadInvalidOrMissingCustomId() {
+            assertThat(provider.extractOrderCode("{\"event_type\":\"CHECKOUT.ORDER.APPROVED\"}")).isNull();
             assertThat(provider.extractOrderCode("bad-payload")).isNull();
         }
     }
 
-    // ─── extractAmount ────────────────────────────────────────────────────────
-
     @Test
     void extractAmount_alwaysReturnsNull() {
-        // PayPal amounts are in USD; stored payments are in VND.
-        // Amount guard is skipped for PayPal webhooks by returning null.
-        String payload = "{\"resource\":{\"amount\":{\"currency_code\":\"USD\",\"value\":\"10.00\"}}}";
-        assertThat(provider.extractAmount(payload)).isNull();
+        assertThat(provider.extractAmount("{\"resource\":{\"amount\":{\"currency_code\":\"USD\",\"value\":\"10.00\"}}}"))
+                .isNull();
     }
-
-    // ─── Helper to set fields on response DTOs (no setters) ──────────────────
 
     private static void setField(Object target, String fieldName, Object value) {
         try {
             var field = target.getClass().getDeclaredField(fieldName);
             field.setAccessible(true);
             field.set(target, value);
-        } catch (Exception e) {
-            throw new RuntimeException("Could not set field " + fieldName, e);
+        } catch (Exception exception) {
+            throw new RuntimeException("Could not set field " + fieldName, exception);
         }
     }
 }

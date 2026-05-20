@@ -559,6 +559,23 @@ Nhiều địa chỉ cho customer: shipping address, billing address. Thêm cờ
 - external_reference (provider's transaction ID)
 - paid_at
 
+**payment_configs**
+- provider, enabled, environment
+- provider-specific typed fields for runtime integration config
+- encrypted secret fields for credentials such as:
+  - MoMo: partner_code, access_key, secret_key
+  - PayPal: client_id, client_secret
+- optional operational fields:
+  - connect_timeout_ms, read_timeout_ms
+  - `config_json` for legacy/debug compatibility only, not as the primary source of truth
+- purpose:
+  - allow admin-managed payment integration config without forcing env-only deployment changes
+  - keep provider config outside customer/order/payment transaction records
+- design rules:
+  - one row per provider via unique constraint on `provider`
+  - secrets must be encrypted before persistence
+  - runtime may merge DB config with env fallback during migration/bootstrap phases
+
 **payment_transactions**
 - payment_id, transaction_code, provider_transaction_id
 - transaction_status, amount

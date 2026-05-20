@@ -5,37 +5,27 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.locnguyen.ecommerce.common.exception.AppException;
 import com.locnguyen.ecommerce.common.exception.ErrorCode;
 import com.locnguyen.ecommerce.domains.order.entity.Order;
+import com.locnguyen.ecommerce.domains.payment.config.MomoResolvedPaymentConfig;
+import com.locnguyen.ecommerce.domains.payment.config.PaymentProviderConfigResolver;
 import com.locnguyen.ecommerce.domains.payment.entity.Payment;
 import com.locnguyen.ecommerce.domains.payment.provider.PaymentProvider;
 import com.locnguyen.ecommerce.domains.payment.provider.PaymentProviderCreateResult;
+import com.locnguyen.ecommerce.infrastructure.payment.PaymentRestClientFactory;
 import com.locnguyen.ecommerce.infrastructure.payment.momo.dto.MomoCreatePaymentRequest;
 import com.locnguyen.ecommerce.infrastructure.payment.momo.dto.MomoCreatePaymentResponse;
 import com.locnguyen.ecommerce.infrastructure.payment.momo.dto.MomoIpnRequest;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 
+import java.io.IOException;
 import java.math.BigDecimal;
 import java.net.URI;
-import java.io.IOException;
 
-/**
- * MoMo wallet one-time payment provider ({@code captureWallet} flow).
- *
- * <p>Active only when {@code app.payment.momo.enabled=true}.
- *
- * <p>Session 1 scope: create-payment URL generation.
- * IPN/webhook state mutation is implemented in Session 2.
- *
- * <p>Never log {@code secretKey}, {@code accessKey}, or the raw signature string.
- */
 @Slf4j
 @Component
-@ConditionalOnProperty(name = "app.payment.momo.enabled", havingValue = "true")
 public class MomoPaymentProvider implements PaymentProvider {
 
     static final String PROVIDER_NAME = "MOMO";
@@ -44,20 +34,20 @@ public class MomoPaymentProvider implements PaymentProvider {
     private static final long MOMO_MAX_AMOUNT = 50_000_000L;
     private static final int MOMO_SUCCESS_CODE = 0;
 
-    private final MomoPaymentProperties properties;
+    private final PaymentProviderConfigResolver configResolver;
     private final MomoSignatureService signatureService;
     private final ObjectMapper objectMapper;
-    private final RestClient restClient;
+    private final PaymentRestClientFactory restClientFactory;
 
     public MomoPaymentProvider(
-            MomoPaymentProperties properties,
+            PaymentProviderConfigResolver configResolver,
             MomoSignatureService signatureService,
             ObjectMapper objectMapper,
-            @Qualifier("momoRestClient") RestClient restClient) {
-        this.properties = properties;
+            PaymentRestClientFactory restClientFactory) {
+        this.configResolver = configResolver;
         this.signatureService = signatureService;
         this.objectMapper = objectMapper;
-        this.restClient = restClient;
+        this.restClientFactory = restClientFactory;
     }
 
     @Override
@@ -65,34 +55,21 @@ public class MomoPaymentProvider implements PaymentProvider {
         return PROVIDER_NAME;
     }
 
-    /**
-     * Verifies the HMAC-SHA256 signature of an inbound MoMo IPN webhook.
-     *
-     * <p>MoMo embeds the signature inside the JSON body as the {@code "signature"} field —
-     * it does NOT use an HTTP signature header. The {@code signature} parameter (from the
-     * {@code X-Signature} header) is used only if non-blank; otherwise the body field is used.
-     *
-     * <p>Also rejects payloads where {@code partnerCode} does not match our configured
-     * partnerCode, preventing spoofed callbacks from another merchant's account.
-     *
-     * <p>Returns {@code false} for any malformed, blank, or signature-mismatching payload.
-     */
     @Override
     public boolean verifySignature(String rawBody, String signature) {
         if (rawBody == null || rawBody.isBlank()) {
             return false;
         }
         try {
+            MomoResolvedPaymentConfig config = momo();
             MomoIpnRequest ipn = objectMapper.readValue(rawBody, MomoIpnRequest.class);
 
-            // partnerCode guard: reject IPN not addressed to us
-            if (!properties.getPartnerCode().equals(ipn.getPartnerCode())) {
+            if (!config.partnerCode().equals(ipn.getPartnerCode())) {
                 log.warn("MoMo IPN partnerCode mismatch: expected={} received={}",
-                        properties.getPartnerCode(), ipn.getPartnerCode());
+                        config.partnerCode(), ipn.getPartnerCode());
                 return false;
             }
 
-            // MoMo puts signature inside the JSON body; X-Signature header is not used
             String receivedSignature = (signature != null && !signature.isBlank())
                     ? signature
                     : ipn.getSignature();
@@ -100,23 +77,15 @@ public class MomoPaymentProvider implements PaymentProvider {
                 return false;
             }
 
-            // Temporarily override the signature field with the one extracted above
-            // so the DTO-based overload uses the correct received value
             ipn.setSignature(receivedSignature);
             return signatureService.verifyIpnSignature(
-                    properties.getAccessKey(), properties.getSecretKey(), ipn);
+                    config.accessKey(), config.secretKey(), ipn);
         } catch (IOException e) {
-            log.warn("MoMo IPN signature verification failed — could not parse payload: {}", e.getMessage());
+            log.warn("MoMo IPN signature verification failed â€” could not parse payload: {}", e.getMessage());
             return false;
         }
     }
 
-    /**
-     * Extracts the payment amount from the MoMo IPN payload for server-side amount validation.
-     *
-     * <p>MoMo sends {@code amount} as a JSON integer (VND, no decimals). This is converted
-     * to {@link BigDecimal} so it can be compared to the stored {@link Payment#getAmount()}.
-     */
     @Override
     public BigDecimal extractAmount(String payload) {
         if (payload == null || payload.isBlank()) return null;
@@ -126,12 +95,11 @@ public class MomoPaymentProvider implements PaymentProvider {
             if (amountNode == null || amountNode.isNull()) return null;
             return BigDecimal.valueOf(amountNode.asLong());
         } catch (Exception e) {
-            log.debug("MoMo extractAmount: failed to parse payload — {}", e.getMessage());
+            log.debug("MoMo extractAmount: failed to parse payload â€” {}", e.getMessage());
             return null;
         }
     }
 
-    /** Returns {@code true} when the IPN payload's {@code resultCode} is 0. */
     @Override
     public boolean isSuccess(String payload) {
         if (payload == null || payload.isBlank()) return false;
@@ -140,15 +108,11 @@ public class MomoPaymentProvider implements PaymentProvider {
             JsonNode resultCode = json.get("resultCode");
             return resultCode != null && resultCode.asInt(-1) == MOMO_SUCCESS_CODE;
         } catch (Exception e) {
-            log.debug("MoMo isSuccess: failed to parse payload — {}", e.getMessage());
+            log.debug("MoMo isSuccess: failed to parse payload â€” {}", e.getMessage());
             return false;
         }
     }
 
-    /**
-     * Extracts MoMo's own transaction ID ({@code transId}) from the IPN payload.
-     * This is used as the {@code providerTxnId} in the payment audit trail.
-     */
     @Override
     public String extractProviderTxnId(String payload) {
         if (payload == null || payload.isBlank()) return null;
@@ -157,18 +121,11 @@ public class MomoPaymentProvider implements PaymentProvider {
             JsonNode transId = json.get("transId");
             return (transId != null && !transId.isNull()) ? transId.asText() : null;
         } catch (Exception e) {
-            log.debug("MoMo extractProviderTxnId: failed to parse payload — {}", e.getMessage());
+            log.debug("MoMo extractProviderTxnId: failed to parse payload â€” {}", e.getMessage());
             return null;
         }
     }
 
-    /**
-     * Extracts the internal order code from the MoMo IPN payload.
-     *
-     * <p>MoMo's {@code orderId} field holds the provider order id we generated
-     * at create-payment time in the format {@code MOMO_{orderCode}_{timestamp}}.
-     * This method strips the prefix and suffix to recover the {@code orderCode}.
-     */
     @Override
     public String extractOrderCode(String payload) {
         if (payload == null || payload.isBlank()) return null;
@@ -178,39 +135,20 @@ public class MomoPaymentProvider implements PaymentProvider {
             if (orderIdNode == null || orderIdNode.isNull()) return null;
             return parseOrderCodeFromProviderOrderId(orderIdNode.asText());
         } catch (Exception e) {
-            log.debug("MoMo extractOrderCode: failed to parse payload — {}", e.getMessage());
+            log.debug("MoMo extractOrderCode: failed to parse payload â€” {}", e.getMessage());
             return null;
         }
     }
 
-    /**
-     * Delegates to {@link #createPayment} and returns the primary web redirect URL.
-     * Use {@link #createPayment} directly when you also need deeplink or QR data.
-     */
     @Override
     public String createPaymentUrl(Payment payment, Order order, String returnUrl, String callbackUrl) {
         return createPayment(payment, order, returnUrl, callbackUrl).getPaymentUrl();
     }
 
-    /**
-     * Calls the MoMo create-payment API and returns the full provider result.
-     *
-     * <p>Validates amount bounds before calling the API.
-     * Throws {@link AppException} with {@link ErrorCode#PAYMENT_FAILED} if:
-     * <ul>
-     *   <li>Amount is outside MoMo's allowed range (1 000 – 50 000 000 VND)</li>
-     *   <li>HTTP call fails or times out</li>
-     *   <li>MoMo returns {@code resultCode != 0}</li>
-     * </ul>
-     *
-     * <p>On success ({@code resultCode == 0}), returns a result with
-     * {@code paymentUrl}, {@code deeplink}, {@code qrCodeUrl},
-     * {@code providerOrderId}, and {@code providerRequestId}.
-     * Payment status is NOT changed to PAID here — that happens on IPN.
-     */
     @Override
     public PaymentProviderCreateResult createPayment(Payment payment, Order order,
                                                      String returnUrl, String callbackUrl) {
+        MomoResolvedPaymentConfig config = momo();
         long amount = toMomoAmount(payment.getAmount());
         validateAmount(amount, order.getOrderCode());
 
@@ -218,19 +156,16 @@ public class MomoPaymentProvider implements PaymentProvider {
         String requestId = buildRequestId(payment.getPaymentCode());
         String orderInfo = "Thanh toan don hang " + order.getOrderCode();
 
-        // Explicit MoMo IPN URL from properties takes priority over the generic base-callback-url.
-        // .trim() guards against trailing \r\n from Windows .env files — these corrupt the HMAC signature.
-        String rawIpnUrl = properties.getIpnUrl();
+        String rawIpnUrl = config.ipnUrl();
         String effectiveIpnUrl = (rawIpnUrl != null && !rawIpnUrl.isBlank())
                 ? rawIpnUrl.trim()
                 : callbackUrl;
-
-        String effectiveRedirectUrl = returnUrl != null ? returnUrl.trim() : properties.getRedirectUrl().trim();
+        String effectiveRedirectUrl = returnUrl != null ? returnUrl.trim() : config.redirectUrl().trim();
 
         MomoCreatePaymentRequest requestBody = MomoCreatePaymentRequest.builder()
-                .partnerCode(properties.getPartnerCode())
-                .accessKey(properties.getAccessKey())
-                .requestType(properties.getRequestType())
+                .partnerCode(config.partnerCode())
+                .accessKey(config.accessKey())
+                .requestType(config.requestType())
                 .ipnUrl(effectiveIpnUrl)
                 .redirectUrl(effectiveRedirectUrl)
                 .orderId(providerOrderId)
@@ -238,11 +173,11 @@ public class MomoPaymentProvider implements PaymentProvider {
                 .orderInfo(orderInfo)
                 .requestId(requestId)
                 .extraData("")
-                .lang(properties.getLang())
-                .signature("") // placeholder — replaced after signing below
+                .lang(config.lang())
+                .signature("")
                 .build();
 
-        String signature = signatureService.signCreatePaymentRequest(requestBody, properties.getSecretKey());
+        String signature = signatureService.signCreatePaymentRequest(requestBody, config.secretKey());
 
         requestBody = MomoCreatePaymentRequest.builder()
                 .partnerCode(requestBody.getPartnerCode())
@@ -262,7 +197,7 @@ public class MomoPaymentProvider implements PaymentProvider {
         log.info("Calling MoMo create-payment API: providerOrderId={} requestId={} amount={} ipnUrl={} redirectUrl={}",
                 providerOrderId, requestId, amount, effectiveIpnUrl, effectiveRedirectUrl);
 
-        MomoCreatePaymentResponse momoResponse = callMomoCreateApi(requestBody, order.getOrderCode());
+        MomoCreatePaymentResponse momoResponse = callMomoCreateApi(config, requestBody, order.getOrderCode());
 
         if (momoResponse.getResultCode() != MOMO_SUCCESS_CODE) {
             log.warn("MoMo create-payment rejected: providerOrderId={} resultCode={} message={}",
@@ -270,9 +205,6 @@ public class MomoPaymentProvider implements PaymentProvider {
             throw new AppException(ErrorCode.PAYMENT_FAILED,
                     "MoMo rejected payment creation: " + momoResponse.getMessage());
         }
-
-        log.info("MoMo create-payment succeeded: providerOrderId={} requestId={}",
-                providerOrderId, requestId);
 
         return PaymentProviderCreateResult.builder()
                 .paymentUrl(momoResponse.getPayUrl())
@@ -285,33 +217,30 @@ public class MomoPaymentProvider implements PaymentProvider {
                 .build();
     }
 
-    // ─── Internal helpers ─────────────────────────────────────────────────────
-
-    private MomoCreatePaymentResponse callMomoCreateApi(MomoCreatePaymentRequest requestBody,
+    private MomoCreatePaymentResponse callMomoCreateApi(MomoResolvedPaymentConfig config,
+                                                        MomoCreatePaymentRequest requestBody,
                                                         String orderCode) {
         try {
+            RestClient restClient = restClientFactory.create(config.connectTimeoutMs(), config.readTimeoutMs());
             MomoCreatePaymentResponse response = restClient.post()
-                    .uri(URI.create(properties.getCreateUrl()))
+                    .uri(URI.create(config.createUrl()))
                     .contentType(MediaType.APPLICATION_JSON)
                     .body(requestBody)
                     .retrieve()
                     .body(MomoCreatePaymentResponse.class);
 
             if (response == null) {
-                throw new AppException(ErrorCode.PAYMENT_FAILED,
-                        "MoMo API returned empty response");
+                throw new AppException(ErrorCode.PAYMENT_FAILED, "MoMo API returned empty response");
             }
             return response;
         } catch (AppException e) {
             throw e;
         } catch (RestClientException e) {
             log.error("MoMo API call failed: orderCode={} error={}", orderCode, e.getMessage());
-            throw new AppException(ErrorCode.PAYMENT_FAILED,
-                    "MoMo API call failed: " + e.getMessage());
+            throw new AppException(ErrorCode.PAYMENT_FAILED, "MoMo API call failed: " + e.getMessage());
         } catch (Exception e) {
             log.error("Unexpected error calling MoMo API: orderCode={} error={}", orderCode, e.getMessage(), e);
-            throw new AppException(ErrorCode.PAYMENT_FAILED,
-                    "Unexpected error calling MoMo API");
+            throw new AppException(ErrorCode.PAYMENT_FAILED, "Unexpected error calling MoMo API");
         }
     }
 
@@ -319,37 +248,18 @@ public class MomoPaymentProvider implements PaymentProvider {
         if (amount < MOMO_MIN_AMOUNT || amount > MOMO_MAX_AMOUNT) {
             log.warn("MoMo payment amount out of range: orderCode={} amount={}", orderCode, amount);
             throw new AppException(ErrorCode.PAYMENT_FAILED,
-                    "Payment amount must be between " + MOMO_MIN_AMOUNT
-                    + " and " + MOMO_MAX_AMOUNT + " VND");
+                    "Payment amount must be between " + MOMO_MIN_AMOUNT + " and " + MOMO_MAX_AMOUNT + " VND");
         }
     }
 
-    /**
-     * Builds the MoMo provider orderId from the internal order code.
-     *
-     * <p>Format: {@code MOMO_{orderCode}_{currentTimeMillis}}
-     * The timestamp ensures uniqueness across retries for the same order.
-     * The orderCode can be recovered via {@link #parseOrderCodeFromProviderOrderId}.
-     */
     private String buildProviderOrderId(String orderCode) {
         return "MOMO_" + orderCode + "_" + System.currentTimeMillis();
     }
 
-    /**
-     * Builds a unique MoMo requestId from the internal payment code.
-     *
-     * <p>Format: {@code REQ_{paymentCode}_{currentTimeMillis}}
-     */
     private String buildRequestId(String paymentCode) {
         return "REQ_" + paymentCode + "_" + System.currentTimeMillis();
     }
 
-    /**
-     * Parses the internal orderCode from a provider orderId.
-     *
-     * <p>Given {@code MOMO_ORD20260514123456_1715700000000},
-     * returns {@code ORD20260514123456}.
-     */
     static String parseOrderCodeFromProviderOrderId(String providerOrderId) {
         if (providerOrderId == null) return null;
         String withoutPrefix = providerOrderId.startsWith("MOMO_")
@@ -362,12 +272,10 @@ public class MomoPaymentProvider implements PaymentProvider {
     }
 
     private static long toMomoAmount(BigDecimal amount) {
-        if (amount == null) return 0L;
-        return amount.longValue();
+        return amount == null ? 0L : amount.longValue();
     }
 
-    private static String text(JsonNode json, String field) {
-        JsonNode node = json.get(field);
-        return (node == null || node.isNull()) ? "" : node.asText("");
+    private MomoResolvedPaymentConfig momo() {
+        return configResolver.resolveMomo();
     }
 }
