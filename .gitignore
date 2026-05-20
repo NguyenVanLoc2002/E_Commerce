@@ -76,7 +76,7 @@ Thumbs.db
 ############################
 # APPLICATION CONFIG SECRETS
 ############################
-
+application-dev.properties
 
 
 ############################
@@ -94,7 +94,19 @@ bin/
 ############################
 # CLAUDE CODE (LOCAL ONLY)
 ############################
-.claude/settings.local.json
+.claude/
+CLAUDE.md
+
+############################
+# CODEX FILES (LOCAL ONLY)
+############################
+.codex/
+AGENTS.md
+
+############################
+# PROMPT FILES (LOCAL ONLY)
+############################
+/docs/prompts/
 
 ############################
 # SPRING BOOT

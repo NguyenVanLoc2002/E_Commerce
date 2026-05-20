@@ -61,6 +61,7 @@ Tài liệu mô tả nghiệp vụ và domain chính của hệ thống backend 
 
 ### 2.5. Payment
 - Payment
+- PaymentConfig
 - PaymentTransaction
 - Refund
 
@@ -450,6 +451,31 @@ Ví dụ:
 - VNPAY
 - STRIPE
 - PAYPAL
+
+### 16.4. PaymentConfig dùng để làm gì
+`PaymentConfig` là thực thể cấu hình tích hợp thanh toán để admin web quản lý trực tiếp trên UI.
+
+Mục tiêu:
+- cho phép bật/tắt từng provider
+- cho phép cập nhật endpoint, timeout, callback-related settings
+- cho phép lưu secret/certificate style config trong DB thay vì buộc deploy lại env
+- tách phần quản trị cấu hình khỏi customer checkout flow
+
+Nguyên tắc runtime hiện tại:
+- runtime ưu tiên đọc config từ `PaymentConfig`
+- nếu DB chưa có row hoặc thiếu một field, backend fallback về `app.payment.*`
+- secret không trả ra API admin; UI chỉ biết trạng thái qua các cờ `has*`
+
+### 16.5. PaymentConfig không thay đổi customer flow
+Việc thêm `PaymentConfig` không đổi:
+- flow checkout của customer
+- API initiate payment của customer
+- redirect sang cổng thanh toán
+- callback / webhook / capture xử lý trạng thái thanh toán
+
+Thay đổi duy nhất là nguồn cấu hình provider được chuyển sang mô hình:
+- admin-managed in DB
+- env fallback for bootstrap / recovery
 
 ---
 

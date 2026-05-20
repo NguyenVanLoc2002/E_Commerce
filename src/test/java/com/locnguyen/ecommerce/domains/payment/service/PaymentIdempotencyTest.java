@@ -1,6 +1,6 @@
 package com.locnguyen.ecommerce.domains.payment.service;
 
-import com.locnguyen.ecommerce.common.config.AppProperties;
+import com.locnguyen.ecommerce.common.config.payment.PaymentProperties;
 import com.locnguyen.ecommerce.common.exception.AppException;
 import com.locnguyen.ecommerce.common.exception.ErrorCode;
 import com.locnguyen.ecommerce.domains.customer.entity.Customer;
@@ -61,7 +61,7 @@ class PaymentIdempotencyTest {
     @Mock PaymentMapper paymentMapper;
     @Mock IdempotencyService idempotencyService;
     @Mock PaymentProviderRegistry providerRegistry;
-    @Mock AppProperties appProperties;
+    @Mock PaymentProperties paymentProperties;
 
     @InjectMocks PaymentServiceImpl paymentService;
 

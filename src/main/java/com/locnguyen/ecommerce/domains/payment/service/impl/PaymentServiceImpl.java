@@ -1,6 +1,6 @@
 package com.locnguyen.ecommerce.domains.payment.service.impl;
 
-import com.locnguyen.ecommerce.common.config.AppProperties;
+import com.locnguyen.ecommerce.common.config.payment.PaymentProperties;
 import com.locnguyen.ecommerce.common.exception.AppException;
 import com.locnguyen.ecommerce.common.exception.ErrorCode;
 import com.locnguyen.ecommerce.common.response.PagedResponse;
@@ -51,7 +51,7 @@ public class PaymentServiceImpl implements PaymentService {
     private final PaymentMapper paymentMapper;
     private final IdempotencyService idempotencyService;
     private final PaymentProviderRegistry providerRegistry;
-    private final AppProperties appProperties;
+    private final PaymentProperties paymentProperties;
 
     // ─── COD payment ────────────────────────────────────────────────────────
 
@@ -385,10 +385,10 @@ public class PaymentServiceImpl implements PaymentService {
         if (providerName == null) return null;
         return providerRegistry.find(providerName)
                 .map(provider -> {
-                    String callbackUrl = appProperties.getPayment().getBaseCallbackUrl();
+                    String callbackUrl = paymentProperties.getBaseCallbackUrl();
                     String resolvedReturnUrl = (returnUrl != null && !returnUrl.isBlank())
                             ? returnUrl
-                            : appProperties.getPayment().getDefaultReturnUrl();
+                            : paymentProperties.getDefaultReturnUrl();
                     try {
                         return provider.createPayment(payment, order, resolvedReturnUrl, callbackUrl);
                     } catch (AppException e) {

@@ -3,11 +3,19 @@ package com.locnguyen.ecommerce.infrastructure.payment.paypal;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.locnguyen.ecommerce.common.exception.AppException;
 import com.locnguyen.ecommerce.common.exception.ErrorCode;
+import com.locnguyen.ecommerce.domains.payment.config.PaymentProviderConfigResolver;
+import com.locnguyen.ecommerce.domains.payment.config.PaypalResolvedPaymentConfig;
+import com.locnguyen.ecommerce.infrastructure.payment.PaymentRestClientFactory;
 import com.locnguyen.ecommerce.infrastructure.payment.paypal.dto.PaypalCaptureOrderResponse;
 import com.locnguyen.ecommerce.infrastructure.payment.paypal.dto.PaypalWebhookVerifyResponse;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.web.client.HttpClientErrorException;
@@ -20,44 +28,62 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.*;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
-/**
- * Unit tests for the capture and webhook verification methods of {@link PaypalClient}.
- */
+@ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.LENIENT)
 class PaypalClientCaptureTest {
 
-    private PaypalPaymentProperties properties;
-    private PaypalClient paypalClient;
-
-    private RestClient restClient;
-    private RestClient.RequestBodyUriSpec uriSpec;
-    private RestClient.RequestBodySpec bodySpec;
-    private RestClient.ResponseSpec responseSpec;
+    @Mock
+    private PaymentProviderConfigResolver configResolver;
+    @Mock
     private PaypalOAuthClient oAuthClient;
+    @Mock
+    private PaymentRestClientFactory restClientFactory;
+    @Mock
+    private RestClient restClient;
+    @Mock
+    private RestClient.RequestBodyUriSpec uriSpec;
+    @Mock
+    private RestClient.RequestBodySpec bodySpec;
+    @Mock
+    private RestClient.ResponseSpec responseSpec;
+
     private final ObjectMapper objectMapper = new ObjectMapper();
+
+    private PaypalResolvedPaymentConfig paypalConfig;
+    private PaypalClient paypalClient;
 
     @BeforeEach
     void setUp() {
-        properties = new PaypalPaymentProperties();
-        properties.setEnabled(true);
-        properties.setClientId("test-client-id");
-        properties.setClientSecret("test-secret");
-        properties.setBaseUrl("https://api-m.sandbox.paypal.com");
-        properties.setCurrency("USD");
-        properties.setWebhookId("WH-12345");
-        properties.setTestConversionEnabled(true);
-        properties.setTestConversionRateVndToUsd(new BigDecimal("25000"));
-        properties.setConnectTimeoutMs(30_000);
-        properties.setReadTimeoutMs(30_000);
+        paypalConfig = new PaypalResolvedPaymentConfig(
+                true,
+                "SANDBOX",
+                "test-client-id",
+                "test-secret",
+                "https://api-m.sandbox.paypal.com",
+                "http://localhost:5173/payment/paypal/return",
+                "http://localhost:5173/payment/paypal/cancel",
+                "WH-12345",
+                "USD",
+                "Locen Studio",
+                "en-US",
+                "PAY_NOW",
+                "IMMEDIATE_PAYMENT_REQUIRED",
+                "NO_SHIPPING",
+                true,
+                new BigDecimal("25000"),
+                30_000,
+                30_000
+        );
 
-        oAuthClient = mock(PaypalOAuthClient.class);
+        when(configResolver.resolvePaypal()).thenReturn(paypalConfig);
         when(oAuthClient.getAccessToken()).thenReturn("test-access-token");
-
-        restClient = mock(RestClient.class);
-        uriSpec = mock(RestClient.RequestBodyUriSpec.class);
-        bodySpec = mock(RestClient.RequestBodySpec.class);
-        responseSpec = mock(RestClient.ResponseSpec.class);
+        when(restClientFactory.create(anyInt(), anyInt())).thenReturn(restClient);
 
         doReturn(uriSpec).when(restClient).post();
         doReturn(bodySpec).when(uriSpec).uri(any(String.class));
@@ -66,7 +92,7 @@ class PaypalClientCaptureTest {
         doReturn(bodySpec).when(bodySpec).body(any(Object.class));
         doReturn(responseSpec).when(bodySpec).retrieve();
 
-        paypalClient = new PaypalClient(properties, oAuthClient, restClient, objectMapper);
+        paypalClient = new PaypalClient(configResolver, oAuthClient, restClientFactory, objectMapper);
     }
 
     private PaypalCaptureOrderResponse emptyCaptureResponse() {
@@ -74,12 +100,10 @@ class PaypalClientCaptureTest {
     }
 
     private PaypalWebhookVerifyResponse verifyResponse(String status) {
-        PaypalWebhookVerifyResponse resp = new PaypalWebhookVerifyResponse();
-        setField(resp, "verificationStatus", status);
-        return resp;
+        PaypalWebhookVerifyResponse response = new PaypalWebhookVerifyResponse();
+        setField(response, "verificationStatus", status);
+        return response;
     }
-
-    // ─── captureOrder ─────────────────────────────────────────────────────────
 
     @Nested
     class CaptureOrder {
@@ -92,26 +116,27 @@ class PaypalClientCaptureTest {
             PaypalCaptureOrderResponse result = paypalClient.captureOrder("PAYPAL_ORDER_001");
 
             assertThat(result).isSameAs(expected);
+            verify(restClientFactory).create(30_000, 30_000);
         }
 
         @Test
-        void throws_PAYMENT_FAILED_whenResponseIsNull() {
+        void throwsPaymentFailed_whenResponseIsNull() {
             when(responseSpec.body(PaypalCaptureOrderResponse.class)).thenReturn(null);
 
             assertThatThrownBy(() -> paypalClient.captureOrder("PAYPAL_ORDER_001"))
                     .isInstanceOf(AppException.class)
-                    .extracting(e -> ((AppException) e).getErrorCode())
+                    .extracting(exception -> ((AppException) exception).getErrorCode())
                     .isEqualTo(ErrorCode.PAYMENT_FAILED);
         }
 
         @Test
-        void throws_PAYMENT_FAILED_onRestClientException() {
+        void throwsPaymentFailed_onRestClientException() {
             when(responseSpec.body(PaypalCaptureOrderResponse.class))
                     .thenThrow(new RestClientException("Connection refused"));
 
             assertThatThrownBy(() -> paypalClient.captureOrder("PAYPAL_ORDER_001"))
                     .isInstanceOf(AppException.class)
-                    .extracting(e -> ((AppException) e).getErrorCode())
+                    .extracting(exception -> ((AppException) exception).getErrorCode())
                     .isEqualTo(ErrorCode.PAYMENT_FAILED);
         }
 
@@ -122,7 +147,7 @@ class PaypalClientCaptureTest {
 
             assertThatThrownBy(() -> paypalClient.captureOrder("PAYPAL_ORDER_001"))
                     .isInstanceOf(AppException.class)
-                    .extracting(e -> ((AppException) e).getErrorCode())
+                    .extracting(exception -> ((AppException) exception).getErrorCode())
                     .isEqualTo(ErrorCode.PAYMENT_FAILED);
         }
 
@@ -132,7 +157,7 @@ class PaypalClientCaptureTest {
 
             paypalClient.captureOrder("ORDER-XYZ-789");
 
-            verify(uriSpec).uri(contains("/v2/checkout/orders/ORDER-XYZ-789/capture"));
+            verify(uriSpec).uri(argThatContains("/v2/checkout/orders/ORDER-XYZ-789/capture"));
         }
 
         @Test
@@ -147,20 +172,21 @@ class PaypalClientCaptureTest {
         }
 
         @Test
-        void throws_PAYMENT_FAILED_on415UnsupportedMediaType() {
+        void throwsPaymentFailed_on415UnsupportedMediaType() {
             when(responseSpec.body(PaypalCaptureOrderResponse.class))
                     .thenThrow(HttpClientErrorException.create(
-                            HttpStatus.UNSUPPORTED_MEDIA_TYPE, "Unsupported Media Type",
-                            null, "{\"name\":\"UNSUPPORTED_MEDIA_TYPE\"}".getBytes(), null));
+                            HttpStatus.UNSUPPORTED_MEDIA_TYPE,
+                            "Unsupported Media Type",
+                            null,
+                            "{\"name\":\"UNSUPPORTED_MEDIA_TYPE\"}".getBytes(),
+                            null));
 
             assertThatThrownBy(() -> paypalClient.captureOrder("PAYPAL_ORDER_001"))
                     .isInstanceOf(AppException.class)
-                    .extracting(e -> ((AppException) e).getErrorCode())
+                    .extracting(exception -> ((AppException) exception).getErrorCode())
                     .isEqualTo(ErrorCode.PAYMENT_FAILED);
         }
     }
-
-    // ─── verifyWebhookSignature ───────────────────────────────────────────────
 
     @Nested
     class VerifyWebhookSignature {
@@ -170,12 +196,14 @@ class PaypalClientCaptureTest {
 
         @Test
         void returnsTrue_whenPaypalVerificationSucceeds() {
-            when(responseSpec.body(PaypalWebhookVerifyResponse.class))
-                    .thenReturn(verifyResponse("SUCCESS"));
+            when(responseSpec.body(PaypalWebhookVerifyResponse.class)).thenReturn(verifyResponse("SUCCESS"));
 
             boolean result = paypalClient.verifyWebhookSignature(
-                    "SHA256withRSA", "https://api.paypal.com/cert",
-                    "TXN-001", "sig-value", "2025-01-01T00:00:00Z",
+                    "SHA256withRSA",
+                    "https://api.paypal.com/cert",
+                    "TXN-001",
+                    "sig-value",
+                    "2025-01-01T00:00:00Z",
                     VALID_RAW_BODY);
 
             assertThat(result).isTrue();
@@ -183,12 +211,14 @@ class PaypalClientCaptureTest {
 
         @Test
         void returnsFalse_whenVerificationStatusIsNotSuccess() {
-            when(responseSpec.body(PaypalWebhookVerifyResponse.class))
-                    .thenReturn(verifyResponse("FAILURE"));
+            when(responseSpec.body(PaypalWebhookVerifyResponse.class)).thenReturn(verifyResponse("FAILURE"));
 
             boolean result = paypalClient.verifyWebhookSignature(
-                    "SHA256withRSA", "https://api.paypal.com/cert",
-                    "TXN-001", "sig-value", "2025-01-01T00:00:00Z",
+                    "SHA256withRSA",
+                    "https://api.paypal.com/cert",
+                    "TXN-001",
+                    "sig-value",
+                    "2025-01-01T00:00:00Z",
                     VALID_RAW_BODY);
 
             assertThat(result).isFalse();
@@ -199,8 +229,11 @@ class PaypalClientCaptureTest {
             when(responseSpec.body(PaypalWebhookVerifyResponse.class)).thenReturn(null);
 
             boolean result = paypalClient.verifyWebhookSignature(
-                    "SHA256withRSA", "https://api.paypal.com/cert",
-                    "TXN-001", "sig-value", "2025-01-01T00:00:00Z",
+                    "SHA256withRSA",
+                    "https://api.paypal.com/cert",
+                    "TXN-001",
+                    "sig-value",
+                    "2025-01-01T00:00:00Z",
                     VALID_RAW_BODY);
 
             assertThat(result).isFalse();
@@ -212,8 +245,11 @@ class PaypalClientCaptureTest {
                     .thenThrow(new RestClientException("timeout"));
 
             boolean result = paypalClient.verifyWebhookSignature(
-                    "SHA256withRSA", "https://api.paypal.com/cert",
-                    "TXN-001", "sig-value", "2025-01-01T00:00:00Z",
+                    "SHA256withRSA",
+                    "https://api.paypal.com/cert",
+                    "TXN-001",
+                    "sig-value",
+                    "2025-01-01T00:00:00Z",
                     VALID_RAW_BODY);
 
             assertThat(result).isFalse();
@@ -222,22 +258,46 @@ class PaypalClientCaptureTest {
         @Test
         void returnsFalse_whenRawBodyIsNotValidJson() {
             boolean result = paypalClient.verifyWebhookSignature(
-                    "SHA256withRSA", "https://api.paypal.com/cert",
-                    "TXN-001", "sig-value", "2025-01-01T00:00:00Z",
+                    "SHA256withRSA",
+                    "https://api.paypal.com/cert",
+                    "TXN-001",
+                    "sig-value",
+                    "2025-01-01T00:00:00Z",
                     "not-json-body");
 
             assertThat(result).isFalse();
-            // Should not reach the HTTP call if body parsing fails
             verify(responseSpec, never()).body(any(Class.class));
         }
 
         @Test
         void returnsFalse_whenWebhookIdNotConfigured() {
-            properties.setWebhookId("");
+            when(configResolver.resolvePaypal()).thenReturn(new PaypalResolvedPaymentConfig(
+                    true,
+                    "SANDBOX",
+                    "test-client-id",
+                    "test-secret",
+                    "https://api-m.sandbox.paypal.com",
+                    "http://localhost:5173/payment/paypal/return",
+                    "http://localhost:5173/payment/paypal/cancel",
+                    "",
+                    "USD",
+                    "Locen Studio",
+                    "en-US",
+                    "PAY_NOW",
+                    "IMMEDIATE_PAYMENT_REQUIRED",
+                    "NO_SHIPPING",
+                    true,
+                    new BigDecimal("25000"),
+                    30_000,
+                    30_000
+            ));
 
             boolean result = paypalClient.verifyWebhookSignature(
-                    "SHA256withRSA", "https://api.paypal.com/cert",
-                    "TXN-001", "sig-value", "2025-01-01T00:00:00Z",
+                    "SHA256withRSA",
+                    "https://api.paypal.com/cert",
+                    "TXN-001",
+                    "sig-value",
+                    "2025-01-01T00:00:00Z",
                     VALID_RAW_BODY);
 
             assertThat(result).isFalse();
@@ -245,10 +305,8 @@ class PaypalClientCaptureTest {
         }
     }
 
-    // ─── Helpers ──────────────────────────────────────────────────────────────
-
-    private static String contains(String substring) {
-        return argThat(s -> s != null && s.contains(substring));
+    private static String argThatContains(String substring) {
+        return org.mockito.ArgumentMatchers.argThat(value -> value != null && value.contains(substring));
     }
 
     private static void setField(Object target, String fieldName, Object value) {
@@ -256,8 +314,8 @@ class PaypalClientCaptureTest {
             var field = target.getClass().getDeclaredField(fieldName);
             field.setAccessible(true);
             field.set(target, value);
-        } catch (Exception e) {
-            throw new RuntimeException("Could not set field " + fieldName, e);
+        } catch (Exception exception) {
+            throw new RuntimeException("Could not set field " + fieldName, exception);
         }
     }
 }

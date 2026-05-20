@@ -4,11 +4,16 @@ import com.locnguyen.ecommerce.common.constants.AppConstants;
 import com.locnguyen.ecommerce.common.response.ApiResponse;
 import com.locnguyen.ecommerce.common.response.PagedResponse;
 import com.locnguyen.ecommerce.domains.payment.dto.PaymentFilter;
+import com.locnguyen.ecommerce.domains.payment.dto.MomoPaymentConfigRequest;
+import com.locnguyen.ecommerce.domains.payment.dto.MomoPaymentConfigResponse;
 import com.locnguyen.ecommerce.domains.payment.dto.PaymentResponse;
+import com.locnguyen.ecommerce.domains.payment.dto.PaypalPaymentConfigRequest;
+import com.locnguyen.ecommerce.domains.payment.dto.PaypalPaymentConfigResponse;
 import com.locnguyen.ecommerce.domains.payment.dto.RefundRequest;
 import com.locnguyen.ecommerce.domains.payment.dto.RefundResponse;
 import com.locnguyen.ecommerce.domains.payment.dto.TransactionResponse;
 import com.locnguyen.ecommerce.domains.payment.dto.WebhookLogResponse;
+import com.locnguyen.ecommerce.domains.payment.service.PaymentConfigService;
 import com.locnguyen.ecommerce.domains.payment.service.PaymentRefundService;
 import com.locnguyen.ecommerce.domains.payment.service.PaymentService;
 import com.locnguyen.ecommerce.domains.payment.service.PaymentWebhookService;
@@ -34,6 +39,7 @@ import java.util.UUID;
 public class AdminPaymentController {
 
     private final PaymentService paymentService;
+    private final PaymentConfigService paymentConfigService;
     private final PaymentRefundService paymentRefundService;
     private final PaymentWebhookService paymentWebhookService;
 
@@ -121,5 +127,31 @@ public class AdminPaymentController {
     @GetMapping("/{id}/webhook-logs")
     public ApiResponse<List<WebhookLogResponse>> getWebhookLogs(@PathVariable UUID id) {
         return ApiResponse.success(paymentWebhookService.getLogsForPayment(id));
+    }
+
+    @Operation(summary = "[Admin] Get MoMo payment provider configuration")
+    @GetMapping("/integration/momo")
+    public ApiResponse<MomoPaymentConfigResponse> getMomoConfig() {
+        return ApiResponse.success(paymentConfigService.getMomoConfig());
+    }
+
+    @Operation(summary = "[Admin] Save MoMo payment provider configuration")
+    @PutMapping("/integration/momo")
+    public ApiResponse<MomoPaymentConfigResponse> updateMomoConfig(
+            @Valid @RequestBody MomoPaymentConfigRequest request) {
+        return ApiResponse.success(paymentConfigService.updateMomoConfig(request));
+    }
+
+    @Operation(summary = "[Admin] Get PayPal payment provider configuration")
+    @GetMapping("/integration/paypal")
+    public ApiResponse<PaypalPaymentConfigResponse> getPaypalConfig() {
+        return ApiResponse.success(paymentConfigService.getPaypalConfig());
+    }
+
+    @Operation(summary = "[Admin] Save PayPal payment provider configuration")
+    @PutMapping("/integration/paypal")
+    public ApiResponse<PaypalPaymentConfigResponse> updatePaypalConfig(
+            @Valid @RequestBody PaypalPaymentConfigRequest request) {
+        return ApiResponse.success(paymentConfigService.updatePaypalConfig(request));
     }
 }
